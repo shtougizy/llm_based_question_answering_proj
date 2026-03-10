@@ -1,0 +1,569 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>错题本 - 拍照搜题系统</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: #f0f4f8; min-height: 100vh; }
+.navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 12px rgba(102,126,234,0.4); }
+.navbar h1 { color: #fff; font-size: 1.2rem; font-weight: 600; }
+.nav-links a { color: rgba(255,255,255,0.85); text-decoration: none; margin-left: 20px; font-size: 0.9rem; }
+.nav-links a:hover, .nav-links a.active { color: #fff; font-weight: 600; }
+.container { max-width: 880px; margin: 28px auto; padding: 0 16px; }
+
+.tabs { display: flex; background: #fff; border-radius: 12px; padding: 4px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); margin-bottom: 18px; }
+.tab-btn { flex: 1; padding: 10px 6px; border: none; background: transparent; border-radius: 9px; font-size: 0.85rem; font-weight: 600; cursor: pointer; color: #6b7280; transition: all 0.2s; }
+.tab-btn.active { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; box-shadow: 0 2px 8px rgba(102,126,234,0.3); }
+.tab-pane { display: none; } .tab-pane.active { display: block; }
+
+.stats-row { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-bottom: 18px; }
+.stat-card { background: #fff; border-radius: 12px; padding: 16px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); text-align: center; }
+.stat-num { font-size: 1.6rem; font-weight: 700; }
+.stat-label { font-size: 0.75rem; color: #9ca3af; margin-top: 2px; }
+.c-red{color:#dc2626;} .c-orange{color:#d97706;} .c-purple{color:#7c3aed;}
+
+.filter-bar { background: #fff; border-radius: 12px; padding: 13px 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); margin-bottom: 12px; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.filter-bar label { font-size: 0.8rem; color: #6b7280; white-space: nowrap; }
+.filter-bar select, .filter-bar input { border: 1.5px solid #e5e7eb; border-radius: 8px; padding: 6px 10px; font-size: 0.82rem; outline: none; background: #f9fafb; color: #374151; }
+.filter-bar select:focus, .filter-bar input:focus { border-color: #667eea; }
+.f-sep { width: 1px; height: 22px; background: #e5e7eb; }
+.f-spacer { flex: 1; min-width: 8px; }
+.btn-sm { padding: 7px 14px; border: none; border-radius: 8px; font-size: 0.82rem; font-weight: 600; cursor: pointer; transition: all 0.2s; }
+.btn-pri { background: #667eea; color: #fff; } .btn-pri:hover{background:#5a67d8;}
+.btn-out { background: #f3f4f6; color: #374151; border: 1.5px solid #e5e7eb; } .btn-out:hover{background:#e5e7eb;}
+.btn-danger { background: #fef2f2; color: #dc2626; border: 1.5px solid #fca5a5; } .btn-danger:hover{background:#fee2e2;}
+.btn-danger:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-lg { padding: 10px 22px; border: none; border-radius: 9px; font-size: 0.88rem; font-weight: 600; cursor: pointer; background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; box-shadow: 0 3px 10px rgba(102,126,234,0.3); }
+.btn-lg:hover{transform:translateY(-1px);} .btn-lg:disabled{opacity:0.6;cursor:not-allowed;transform:none;}
+
+/* Select mode */
+.toolbar { background: #fff; border-radius: 12px; padding: 11px 18px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); margin-bottom: 12px; display: flex; align-items: center; gap: 10px; }
+.toolbar.hidden { display: none; }
+.sel-info { font-size: 0.85rem; color: #374151; flex: 1; }
+.sel-info strong { color: #667eea; }
+
+.result-bar { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.result-info { font-size: 0.82rem; color: #6b7280; }
+
+.card-wrap { position: relative; }
+.card-wrap .check-area { position: absolute; left: 0; top: 0; bottom: 0; width: 48px; display: none; align-items: center; justify-content: center; z-index: 2; cursor: pointer; }
+.select-mode .card-wrap .check-area { display: flex; }
+.select-mode .wc-card { padding-left: 52px; }
+.card-checkbox { width: 20px; height: 20px; border-radius: 6px; border: 2px solid #d1d5db; background: #fff; display: flex; align-items: center; justify-content: center; transition: all 0.15s; cursor: pointer; }
+.card-checkbox.checked { background: #667eea; border-color: #667eea; }
+.card-checkbox.checked::after { content: "✓"; color: #fff; font-size: 13px; font-weight: 700; }
+
+.wc-card { background: #fff; border-radius: 14px; padding: 18px 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); margin-bottom: 11px; border-left: 4px solid #fca5a5; border-right: 1.5px solid transparent; border-top: 1.5px solid transparent; border-bottom: 1.5px solid transparent; cursor: pointer; transition: all 0.2s; }
+.wc-card:hover { border-color: #fca5a5; }
+.wc-card.expanded { border-color: #fca5a5; }
+.wc-card.selected { border-color: #667eea; background: #f5f3ff; }
+.wc-header { display: flex; align-items: flex-start; gap: 12px; }
+.wc-main { flex: 1; min-width: 0; }
+.wq { font-size: 0.88rem; color: #1f2937; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.5; }
+.wq.full { white-space: normal; }
+.wc-meta { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; align-items: center; }
+.tag{padding:2px 8px;border-radius:10px;font-size:0.72rem;font-weight:500;}
+.tp{background:#f3e8ff;color:#7c3aed;} .to{background:#ffedd5;color:#c2410c;} .tg{background:#f3f4f6;color:#6b7280;} .tb{background:#dbeafe;color:#1d4ed8;}
+.ctime { font-size: 0.72rem; color: #9ca3af; margin-left: auto; white-space: nowrap; }
+.wc-detail { display: none; margin-top: 14px; padding-top: 14px; border-top: 1px solid #fee2e2; }
+.wc-detail.show { display: block; }
+.dl{font-size:0.72rem;color:#9ca3af;font-weight:600;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px;margin-top:12px;}
+.dl:first-child{margin-top:0;}
+.db{font-size:0.85rem;line-height:1.7;border-radius:8px;padding:10px 12px;white-space:pre-wrap;}
+.dbg{background:#f8fafc;color:#374151;} .dbgr{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;} .dbb{background:#eff6ff;color:#1e40af;border:1px solid #93c5fd;}
+.kn-tags{display:flex;flex-wrap:wrap;gap:5px;}
+.kn-tag{padding:3px 10px;background:#fef3c7;color:#92400e;border-radius:10px;font-size:0.75rem;}
+.card-actions{display:flex;gap:8px;margin-top:12px;}
+.abtn{padding:6px 14px;border-radius:7px;font-size:0.78rem;font-weight:600;cursor:pointer;border:none;}
+.abtn-rm{background:#fffbeb;color:#d97706;border:1px solid #fde68a;} .abtn-rm:hover{background:#fef3c7;}
+.abtn-del{background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;} .abtn-del:hover{background:#fee2e2;}
+
+/* Cluster & practice (same as before) */
+.kn-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px,1fr)); gap: 10px; margin-bottom: 18px; }
+.kn-card { background: #fff; border-radius: 10px; padding: 14px 12px; text-align: center; box-shadow: 0 2px 8px rgba(0,0,0,0.06); border: 1.5px solid #fde68a; position: relative; }
+.kn-rank { position: absolute; top: 6px; left: 8px; font-size: 0.68rem; color: #d97706; font-weight: 700; }
+.kn-name { font-size: 0.82rem; color: #374151; font-weight: 500; margin-bottom: 6px; line-height: 1.3; }
+.kn-bar-wrap { background: #fef3c7; border-radius: 4px; height: 6px; margin-bottom: 4px; overflow: hidden; }
+.kn-bar { background: linear-gradient(90deg, #f59e0b, #d97706); height: 100%; border-radius: 4px; }
+.kn-count { font-size: 0.72rem; color: #92400e; }
+.cluster-card { background: #fff; border-radius: 14px; padding: 20px; box-shadow: 0 2px 12px rgba(0,0,0,0.07); margin-bottom: 14px; border-left: 5px solid #667eea; }
+.cluster-card.sev-high{border-left-color:#dc2626;} .cluster-card.sev-mid{border-left-color:#f59e0b;} .cluster-card.sev-low{border-left-color:#10b981;}
+.cluster-header { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.cluster-title { font-size: 1rem; font-weight: 700; color: #1f2937; }
+.cluster-sub { font-size: 0.78rem; color: #6b7280; margin-top: 2px; }
+.cluster-badge { margin-left: auto; padding: 4px 12px; border-radius: 20px; font-size: 0.78rem; font-weight: 700; }
+.badge-high{background:#fef2f2;color:#dc2626;} .badge-mid{background:#fffbeb;color:#d97706;} .badge-low{background:#f0fdf4;color:#059669;}
+.kn-freq-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
+.kn-freq-item{background:#f3f4f6;border-radius:8px;padding:5px 10px;font-size:0.78rem;color:#374151;display:flex;align-items:center;gap:5px;}
+.kn-freq-count{background:#667eea;color:#fff;border-radius:10px;padding:0 6px;font-size:0.7rem;font-weight:700;}
+.practice-section{margin-bottom:28px;}
+.practice-cluster-header{background:#fff;border-radius:12px;padding:16px 18px;box-shadow:0 2px 12px rgba(0,0,0,0.07);margin-bottom:12px;display:flex;align-items:center;gap:12px;}
+.pch-info{flex:1;}
+.pch-title{font-size:0.95rem;font-weight:700;color:#1f2937;}
+.pch-desc{font-size:0.78rem;color:#6b7280;margin-top:3px;}
+.pch-badge{padding:4px 10px;border-radius:8px;font-size:0.75rem;font-weight:600;}
+.practice-q-card{background:#fff;border-radius:12px;padding:16px;box-shadow:0 2px 8px rgba(0,0,0,0.06);margin-bottom:10px;border:1.5px solid #e5e7eb;cursor:pointer;}
+.practice-q-card:hover{border-color:#a78bfa;} .practice-q-card.ans-shown{border-color:#86efac;background:#f0fdf4;}
+.pq-header{display:flex;align-items:flex-start;gap:10px;}
+.pq-num{width:26px;height:26px;background:#667eea;color:#fff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700;flex-shrink:0;}
+.pq-content{flex:1;font-size:0.88rem;color:#1f2937;line-height:1.6;}
+.pq-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;}
+.pq-answer{display:none;margin-top:12px;padding-top:12px;border-top:1px solid #d1fae5;}
+.pq-answer.show{display:block;}
+.pq-ans-box{background:#f0fdf4;border-radius:8px;padding:10px 12px;font-size:0.85rem;color:#166534;line-height:1.7;white-space:pre-wrap;}
+.pq-show-btn{margin-top:8px;padding:5px 14px;border:1.5px solid #86efac;background:transparent;border-radius:7px;font-size:0.78rem;color:#059669;cursor:pointer;font-weight:600;}
+.pq-show-btn:hover{background:#d1fae5;}
+.report-card{background:#fff;border-radius:14px;padding:22px;box-shadow:0 2px 12px rgba(0,0,0,0.07);margin-bottom:18px;}
+.report-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
+.report-title{font-size:1rem;font-weight:600;color:#374151;}
+.report-box{background:#f0fdf4;border:1.5px solid #86efac;border-radius:10px;padding:16px;font-size:0.88rem;line-height:1.85;color:#166534;white-space:pre-wrap;}
+.empty-state{text-align:center;padding:60px 20px;color:#9ca3af;}
+.empty-icon{font-size:3.5rem;margin-bottom:12px;}
+.spinner-wrap{text-align:center;padding:40px;}
+.spinner{width:36px;height:36px;border:3px solid #e5e7eb;border-top-color:#667eea;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.pagination{display:flex;justify-content:center;gap:6px;margin-top:16px;padding-bottom:40px;}
+.page-btn{width:34px;height:34px;border-radius:8px;border:1.5px solid #e5e7eb;background:#fff;font-size:0.85rem;cursor:pointer;display:flex;align-items:center;justify-content:center;color:#374151;}
+.page-btn:hover{border-color:#667eea;color:#667eea;} .page-btn.active{background:#667eea;color:#fff;border-color:#667eea;} .page-btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+/* Overlay */
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.4);z-index:100;align-items:center;justify-content:center;}
+.overlay.show{display:flex;}
+.dialog{background:#fff;border-radius:16px;padding:28px 28px 22px;max-width:360px;width:90%;box-shadow:0 8px 40px rgba(0,0,0,0.18);}
+.dialog h3{font-size:1rem;color:#1f2937;margin-bottom:8px;}
+.dialog p{font-size:0.85rem;color:#6b7280;line-height:1.6;margin-bottom:20px;}
+.dialog-btns{display:flex;gap:10px;justify-content:flex-end;}
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <h1>📚 拍照搜题辅助学习系统</h1>
+  <div class="nav-links"><a href="/">首页</a><a href="/history">历史记录</a><a href="/wrong-book" class="active">错题本</a></div>
+</nav>
+
+<div class="container">
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab(0)">📋 错题列表</button>
+    <button class="tab-btn" onclick="switchTab(1)">🧠 聚类分析</button>
+    <button class="tab-btn" onclick="switchTab(2)">📝 练习推荐</button>
+    <button class="tab-btn" onclick="switchTab(3)">✨ AI 报告</button>
+  </div>
+
+  <!-- Tab 0: 错题列表 -->
+  <div class="tab-pane active" id="pane-0">
+    <div class="stats-row">
+      <div class="stat-card"><div class="stat-num c-red" id="wl-total">-</div><div class="stat-label">错题总数</div></div>
+      <div class="stat-card"><div class="stat-num c-orange" id="wl-subjects">-</div><div class="stat-label">涉及学科</div></div>
+      <div class="stat-card"><div class="stat-num c-purple" id="wl-kns">-</div><div class="stat-label">知识点数</div></div>
+    </div>
+    <div class="filter-bar">
+      <label>学科</label><select id="wl-sub"><option value="all">全部学科</option></select>
+      <div class="f-sep"></div>
+      <label>题型</label><select id="wl-type"><option value="all">全部题型</option></select>
+      <div class="f-sep"></div>
+      <label>难度</label>
+      <select id="wl-diff"><option value="all">全部</option><option value="简单">简单</option><option value="一般">一般</option><option value="较难">较难</option><option value="困难">困难</option></select>
+      <div class="f-sep"></div>
+      <label>知识点</label><select id="wl-kn"><option value="all">全部知识点</option></select>
+      <div class="f-sep"></div>
+      <input type="text" id="wl-kw" placeholder="🔍 关键词..." style="width:130px">
+      <div class="f-spacer"></div>
+      <button class="btn-sm btn-out" onclick="resetWL()">重置</button>
+      <button class="btn-sm btn-pri" onclick="applyWL()">筛选</button>
+    </div>
+
+    <!-- 多选工具栏 -->
+    <div class="toolbar hidden" id="wl-toolbar">
+      <input type="checkbox" id="wl-chk-all" onchange="toggleAllWL(this.checked)" style="width:18px;height:18px;cursor:pointer;accent-color:#667eea">
+      <span class="sel-info">已选 <strong id="wl-sel-count">0</strong> 条</span>
+      <button class="btn-sm btn-out" onclick="exitWLSelect()">取消</button>
+      <button class="btn-sm btn-danger" id="wl-del-btn" onclick="confirmWLDelete()" disabled>🗑 删除所选</button>
+    </div>
+
+    <div class="result-bar">
+      <div class="result-info" id="wl-info"></div>
+      <button class="btn-sm btn-out" id="wl-sel-btn" onclick="enterWLSelect()" style="font-size:0.8rem">☑ 多选</button>
+    </div>
+    <div id="wl-container"><div class="spinner-wrap"><div class="spinner"></div></div></div>
+    <div class="pagination" id="wl-pag"></div>
+  </div>
+
+  <!-- Tab 1: 聚类分析 -->
+  <div class="tab-pane" id="pane-1">
+    <div class="report-card" style="margin-bottom:16px">
+      <div class="report-header">
+        <div>
+          <div class="report-title">🧠 KMeans 知识群聚类分析</div>
+          <div style="font-size:0.8rem;color:#9ca3af;margin-top:4px">使用 KMeans 算法对错题知识点向量化聚类，识别薄弱知识群</div>
+        </div>
+        <button class="btn-lg" id="cluster-btn" onclick="loadClusters()">分析</button>
+      </div>
+      <div class="kn-grid" id="kn-freq-grid"></div>
+    </div>
+    <div id="cluster-container"></div>
+  </div>
+
+  <!-- Tab 2: 练习推荐 -->
+  <div class="tab-pane" id="pane-2">
+    <div class="report-card" style="margin-bottom:16px">
+      <div class="report-header">
+        <div>
+          <div class="report-title">📝 个性化练习推荐</div>
+          <div style="font-size:0.8rem;color:#9ca3af;margin-top:4px">基于聚类薄弱知识群，从题库推荐针对性练习题</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <label style="font-size:0.82rem;color:#6b7280">每群题数</label>
+          <select id="prac-n" style="border:1.5px solid #e5e7eb;border-radius:8px;padding:6px 10px;font-size:0.82rem;outline:none;background:#f9fafb;">
+            <option value="3">3题</option><option value="5" selected>5题</option><option value="8">8题</option>
+          </select>
+          <button class="btn-lg" id="prac-btn" onclick="loadPractice()">生成练习</button>
+        </div>
+      </div>
+    </div>
+    <div id="practice-container"><div class="empty-state"><div class="empty-icon">📝</div><div>点击「生成练习」获取个性化练习题</div></div></div>
+  </div>
+
+  <!-- Tab 3: AI 报告 -->
+  <div class="tab-pane" id="pane-3">
+    <div class="report-card">
+      <div class="report-header">
+        <div>
+          <div class="report-title">✨ AI 个性化错题分析报告</div>
+          <div style="font-size:0.8rem;color:#9ca3af;margin-top:4px">基于所有错题，由 AI 生成深度学习建议</div>
+        </div>
+        <button class="btn-lg" id="rep-btn" onclick="genReport()">生成报告</button>
+      </div>
+      <div id="rep-container" style="color:#9ca3af;font-size:0.85rem">点击「生成报告」，AI 将分析错题模式并给出学习建议。</div>
+    </div>
+  </div>
+</div>
+
+<!-- 删除确认弹窗 -->
+<div class="overlay" id="overlay">
+  <div class="dialog">
+    <h3>⚠️ 确认删除</h3>
+    <p id="dialog-msg">确定要删除选中的记录吗？此操作不可撤销。</p>
+    <div class="dialog-btns">
+      <button class="btn-sm btn-out" onclick="closeDialog()">取消</button>
+      <button class="btn-sm btn-danger" onclick="doDelete()">确认删除</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const WL_PS=8;
+let allWrong=[], filteredWrong=[], wlPage=1;
+let wlSelectMode=false, wlSelected=new Set();
+let pendingDeleteIds=[], pendingDeleteCtx="";
+
+// ========== Tab ==========
+function switchTab(idx){
+  document.querySelectorAll(".tab-btn").forEach((b,i)=>b.classList.toggle("active",i===idx));
+  document.querySelectorAll(".tab-pane").forEach((p,i)=>p.classList.toggle("active",i===idx));
+}
+
+// ========== 错题列表 ==========
+async function loadWrong(){
+  const d=await(await fetch("/api/wrong-book?username=default")).json();
+  allWrong=d.wrong_questions||[];
+  const subs=new Set(allWrong.map(q=>q.subject).filter(Boolean));
+  const types=new Set(allWrong.map(q=>q.ques_type).filter(Boolean));
+  const kns=new Set(allWrong.flatMap(q=>q.knowledges||[]));
+  document.getElementById("wl-total").textContent=allWrong.length;
+  document.getElementById("wl-subjects").textContent=subs.size;
+  document.getElementById("wl-kns").textContent=kns.size;
+  fillSel("wl-sub",[...subs].sort(),"全部学科");
+  fillSel("wl-type",[...types].sort(),"全部题型");
+  fillSel("wl-kn",[...kns].sort(),"全部知识点");
+  applyWL(); loadKnFreq();
+}
+
+function fillSel(id,vals,ph){
+  const s=document.getElementById(id);
+  s.innerHTML=`<option value="all">${ph}</option>`;
+  vals.forEach(v=>{const o=document.createElement("option");o.value=v;o.textContent=v;s.appendChild(o);});
+}
+
+function applyWL(){
+  const sub=document.getElementById("wl-sub").value;
+  const tp=document.getElementById("wl-type").value;
+  const df=document.getElementById("wl-diff").value;
+  const kn=document.getElementById("wl-kn").value;
+  const kw=document.getElementById("wl-kw").value.trim().toLowerCase();
+  filteredWrong=allWrong.filter(q=>{
+    if(sub!=="all"&&q.subject!==sub) return false;
+    if(tp!=="all"&&q.ques_type!==tp) return false;
+    if(df!=="all"&&q.ques_difficulty!==df) return false;
+    if(kn!=="all"&&!(q.knowledges||[]).includes(kn)) return false;
+    if(kw&&!q.question_text.toLowerCase().includes(kw)) return false;
+    return true;
+  });
+  wlPage=1; wlSelected.clear(); updateWLSelUI();
+  document.getElementById("wl-info").textContent=`共 ${filteredWrong.length} 道错题`+(filteredWrong.length<allWrong.length?`（已筛选）`:"");
+  renderWL();
+}
+
+function resetWL(){
+  ["wl-sub","wl-type","wl-diff","wl-kn"].forEach(id=>document.getElementById(id).value="all");
+  document.getElementById("wl-kw").value=""; applyWL();
+}
+
+function renderWL(){
+  const c=document.getElementById("wl-container");
+  const rows=filteredWrong.slice((wlPage-1)*WL_PS,wlPage*WL_PS);
+  if(!filteredWrong.length){
+    c.innerHTML=`<div class="empty-state"><div class="empty-icon">${allWrong.length?"🔍":"🎉"}</div><div>${allWrong.length?"没有符合条件的错题":"错题本为空，继续加油！"}</div></div>`;
+    document.getElementById("wl-pag").innerHTML=""; return;
+  }
+  c.innerHTML=rows.map(q=>buildWC(q)).join("");
+  if(wlSelectMode) c.classList.add("select-mode");
+  renderWLPag();
+}
+
+function buildWC(q){
+  const time=q.created_at?q.created_at.replace("T"," ").substring(0,16):"";
+  const kns=(q.knowledges||[]).slice(0,5);
+  const m=q.matched_question;
+  const sim=q.similarity_score?Math.round(q.similarity_score*100):0;
+  const sel=wlSelected.has(q.id);
+  return `<div class="card-wrap">
+    <div class="check-area" onclick="toggleWLSel(${q.id},event)">
+      <div class="card-checkbox ${sel?"checked":""}" id="wchk-${q.id}"></div>
+    </div>
+    <div class="wc-card ${sel?"selected":""}" id="wcc-${q.id}" onclick="wcClick(${q.id},event)">
+      <div class="wc-header">
+        <div style="font-size:1.4rem;flex-shrink:0">📕</div>
+        <div class="wc-main">
+          <div class="wq" id="wq-${q.id}">${esc(q.question_text)}</div>
+          <div class="wc-meta">
+            ${q.subject?`<span class="tag tp">${q.subject}</span>`:""}
+            ${q.ques_type?`<span class="tag to">${q.ques_type}</span>`:""}
+            ${q.ques_difficulty?`<span class="tag tg">${q.ques_difficulty}</span>`:""}
+            ${sim>=70?`<span class="tag tb">题库${sim}%</span>`:""}
+            <span class="ctime">🕐 ${time}</span>
+          </div>
+        </div>
+      </div>
+      <div class="wc-detail" id="wd-${q.id}">
+        <div class="dl">题目全文</div><div class="db dbg">${esc(q.question_text)}</div>
+        ${m&&sim>=70?`<div class="dl">题库标准答案</div><div class="db dbb">${esc(m.ques_content||"")}${m.ques_answer?"\n答案："+(Array.isArray(m.ques_answer)?m.ques_answer.join("、"):m.ques_answer):""}${m.ques_analyze?"\n解析："+m.ques_analyze:""}</div>`:""}
+        <div class="dl">AI 解析</div><div class="db dbgr">${esc(q.llm_answer||"暂无")}</div>
+        ${kns.length?`<div class="dl">知识点</div><div class="kn-tags">${kns.map(k=>`<span class="kn-tag">${k}</span>`).join("")}</div>`:""}
+        <div class="card-actions">
+          <button class="abtn abtn-rm" onclick="event.stopPropagation();unmkWrong(${q.id})">📤 移出错题本</button>
+          <button class="abtn abtn-del" onclick="event.stopPropagation();confirmDeleteOne(${q.id},'wl')">🗑 删除记录</button>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+function wcClick(id,e){
+  if(wlSelectMode){toggleWLSel(id,e);return;}
+  document.getElementById(`wd-${id}`).classList.toggle("show");
+  document.getElementById(`wcc-${id}`).classList.toggle("expanded");
+  document.getElementById(`wq-${id}`).classList.toggle("full");
+}
+
+function toggleWLSel(id,e){
+  e.stopPropagation();
+  if(wlSelected.has(id)) wlSelected.delete(id); else wlSelected.add(id);
+  document.getElementById(`wchk-${id}`)?.classList.toggle("checked",wlSelected.has(id));
+  document.getElementById(`wcc-${id}`)?.classList.toggle("selected",wlSelected.has(id));
+  updateWLSelUI();
+}
+
+function toggleAllWL(checked){
+  const rows=filteredWrong.slice((wlPage-1)*WL_PS,wlPage*WL_PS);
+  rows.forEach(r=>{if(checked)wlSelected.add(r.id);else wlSelected.delete(r.id);});
+  renderWL(); updateWLSelUI();
+}
+
+function enterWLSelect(){
+  wlSelectMode=true;
+  document.getElementById("wl-toolbar").classList.remove("hidden");
+  document.getElementById("wl-sel-btn").style.display="none";
+  document.getElementById("wl-container").classList.add("select-mode");
+  updateWLSelUI();
+}
+
+function exitWLSelect(){
+  wlSelectMode=false; wlSelected.clear();
+  document.getElementById("wl-toolbar").classList.add("hidden");
+  document.getElementById("wl-sel-btn").style.display="";
+  document.getElementById("wl-container").classList.remove("select-mode");
+  document.getElementById("wl-chk-all").checked=false;
+  renderWL();
+}
+
+function updateWLSelUI(){
+  document.getElementById("wl-sel-count").textContent=wlSelected.size;
+  document.getElementById("wl-del-btn").disabled=wlSelected.size===0;
+}
+
+function confirmWLDelete(){
+  if(!wlSelected.size) return;
+  pendingDeleteIds=[...wlSelected]; pendingDeleteCtx="wl";
+  document.getElementById("dialog-msg").textContent=`确定要删除选中的 ${pendingDeleteIds.length} 条错题记录吗？此操作不可撤销。`;
+  document.getElementById("overlay").classList.add("show");
+}
+
+function confirmDeleteOne(id,ctx){
+  pendingDeleteIds=[id]; pendingDeleteCtx=ctx||"wl";
+  document.getElementById("dialog-msg").textContent="确定要删除这条记录吗？此操作不可撤销。";
+  document.getElementById("overlay").classList.add("show");
+}
+
+function closeDialog(){document.getElementById("overlay").classList.remove("show");}
+
+async function doDelete(){
+  closeDialog();
+  const resp=await fetch("/api/delete-records",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({record_ids:pendingDeleteIds,username:"default"})});
+  if(resp.ok){
+    allWrong=allWrong.filter(r=>!pendingDeleteIds.includes(r.id));
+    pendingDeleteIds.forEach(id=>wlSelected.delete(id));
+    document.getElementById("wl-total").textContent=allWrong.length;
+    applyWL();
+    if(wlSelectMode) exitWLSelect();
+  }
+}
+
+async function unmkWrong(id){
+  const resp=await fetch("/api/unmark-wrong",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({record_id:id,username:"default"})});
+  if(resp.ok){
+    allWrong=allWrong.filter(r=>r.id!==id);
+    document.getElementById("wl-total").textContent=allWrong.length;
+    applyWL();
+  }
+}
+
+function renderWLPag(){
+  const total=Math.ceil(filteredWrong.length/WL_PS);
+  const p=document.getElementById("wl-pag");
+  if(total<=1){p.innerHTML="";return;}
+  let h=`<button class="page-btn" onclick="wlGo(${wlPage-1})" ${wlPage===1?"disabled":""}>‹</button>`;
+  for(let i=1;i<=total;i++){
+    if(i===1||i===total||Math.abs(i-wlPage)<=2) h+=`<button class="page-btn ${i===wlPage?"active":""}" onclick="wlGo(${i})">${i}</button>`;
+    else if(Math.abs(i-wlPage)===3) h+=`<span style="padding:0 4px;color:#9ca3af">…</span>`;
+  }
+  h+=`<button class="page-btn" onclick="wlGo(${wlPage+1})" ${wlPage===total?"disabled":""}>›</button>`;
+  p.innerHTML=h;
+}
+function wlGo(p){const t=Math.ceil(filteredWrong.length/WL_PS);if(p<1||p>t)return;wlPage=p;renderWL();window.scrollTo({top:0,behavior:"smooth"});}
+
+// ========== 知识点频率 ==========
+async function loadKnFreq(){
+  const d=await(await fetch("/api/knowledge-stats?username=default")).json();
+  const stats=d.stats||[];
+  const grid=document.getElementById("kn-freq-grid");
+  if(!stats.length){grid.innerHTML="<div style=\"color:#9ca3af;font-size:0.85rem\">暂无数据</div>";return;}
+  const mx=stats[0].wrong_count;
+  grid.innerHTML=stats.slice(0,12).map((s,i)=>`
+    <div class="kn-card">
+      <div class="kn-rank">No.${i+1}</div>
+      <div class="kn-name">${s.knowledge}</div>
+      <div class="kn-bar-wrap"><div class="kn-bar" style="width:${Math.round(s.wrong_count/mx*100)}%"></div></div>
+      <div class="kn-count">出错 ${s.wrong_count} 次${s.subject?" · "+s.subject:""}</div>
+    </div>`).join("");
+}
+
+// ========== 聚类分析 ==========
+async function loadClusters(){
+  const btn=document.getElementById("cluster-btn");
+  const c=document.getElementById("cluster-container");
+  btn.disabled=true; btn.textContent="⏳ 分析中...";
+  c.innerHTML="<div class=\"spinner-wrap\"><div class=\"spinner\"></div></div>";
+  try{
+    const d=await(await fetch("/api/cluster-analysis?username=default")).json();
+    if(!d.clusters||!d.clusters.length){c.innerHTML="<div class=\"empty-state\"><div class=\"empty-icon\">🧠</div><div>错题数量不足，无法聚类。</div></div>";return;}
+    c.innerHTML=d.clusters.map(cl=>buildClusterCard(cl)).join("");
+  }catch(e){c.innerHTML="<div style=\"color:#dc2626;font-size:0.85rem\">分析失败，请稍后重试</div>";}
+  finally{btn.disabled=false;btn.textContent="重新分析";}
+}
+
+function buildClusterCard(cl){
+  const sc=cl.severity==="高"?"sev-high":cl.severity==="中"?"sev-mid":"sev-low";
+  const bc=cl.severity==="高"?"badge-high":cl.severity==="中"?"badge-mid":"badge-low";
+  const icon=cl.severity==="高"?"🔴":cl.severity==="中"?"🟡":"🟢";
+  const fe=Object.entries(cl.knowledge_freq||{}).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  return `<div class="cluster-card ${sc}">
+    <div class="cluster-header">
+      <div style="font-size:1.6rem">${icon}</div>
+      <div><div class="cluster-title">知识群：${cl.label}</div><div class="cluster-sub">涉及 ${cl.subjects.join("、")||"未分类"} · 错题 ${cl.wrong_count} 道</div></div>
+      <span class="cluster-badge ${bc}">薄弱程度：${cl.severity}</span>
+    </div>
+    ${fe.length?`<div style="font-size:0.78rem;color:#6b7280;margin-bottom:8px;font-weight:600">知识点出错频率</div><div class="kn-freq-grid">${fe.map(([k,v])=>`<div class="kn-freq-item">${k}<span class="kn-freq-count">${v}</span></div>`).join("")}</div>`:""}
+    <div style="font-size:0.78rem;color:#9ca3af">💡 切换到「练习推荐」标签获取针对性练习题。</div>
+  </div>`;
+}
+
+// ========== 练习推荐 ==========
+async function loadPractice(){
+  const btn=document.getElementById("prac-btn");
+  const c=document.getElementById("practice-container");
+  const n=document.getElementById("prac-n").value;
+  btn.disabled=true; btn.textContent="⏳ 生成中...";
+  c.innerHTML="<div class=\"spinner-wrap\"><div class=\"spinner\"></div></div>";
+  try{
+    const d=await(await fetch(`/api/practice-plan?username=default&questions_per_cluster=${n}`)).json();
+    if(!d.plan||!d.plan.length){c.innerHTML="<div class=\"empty-state\"><div class=\"empty-icon\">📝</div><div>暂无错题，无法生成练习。</div></div>";return;}
+    c.innerHTML=d.plan.map((p,pi)=>buildPracticeSection(p,pi)).join("");
+  }catch(e){c.innerHTML="<div style=\"color:#dc2626;font-size:0.85rem\">生成失败</div>";}
+  finally{btn.disabled=false;btn.textContent="重新生成";}
+}
+
+function buildPracticeSection(plan,pi){
+  const sc=plan.severity==="高"?"#dc2626":plan.severity==="中"?"#d97706":"#059669";
+  const qs=plan.practice_questions||[];
+  if(!qs.length) return "";
+  return `<div class="practice-section">
+    <div class="practice-cluster-header">
+      <div style="font-size:1.5rem">🎯</div>
+      <div class="pch-info"><div class="pch-title">针对知识群：${esc(plan.label)}</div><div class="pch-desc">薄弱程度 <strong style="color:${sc}">${plan.severity}</strong> · ${plan.subjects.join("、")||""} · 共 ${qs.length} 道</div></div>
+      <span class="pch-badge" style="background:${sc}22;color:${sc}">错题 ${plan.wrong_count} 道</span>
+    </div>
+    ${qs.map((q,qi)=>{
+      const ans=Array.isArray(q.ques_answer)?q.ques_answer.join("、"):(q.ques_answer||"");
+      const kns=(q.ques_knowledges||[]).slice(0,3);
+      return `<div class="practice-q-card" id="pqc-${pi}-${qi}">
+        <div class="pq-header">
+          <div class="pq-num">${qi+1}</div>
+          <div class="pq-content">${esc(q.ques_content||"")}
+            <div class="pq-meta">${q.subject?`<span class="tag tp">${q.subject}</span>`:""} ${q.ques_type?`<span class="tag to">${q.ques_type}</span>`:""} ${q.ques_difficulty?`<span class="tag tg">${q.ques_difficulty}</span>`:""} ${kns.map(k=>`<span class="kn-tag">${k}</span>`).join("")}</div>
+          </div>
+        </div>
+        <div class="pq-answer" id="pqa-${pi}-${qi}"><div class="pq-ans-box">✅ 答案：${esc(ans)}${q.ques_analyze?"\n\n📖 解析："+esc(q.ques_analyze):""}</div></div>
+        <button class="pq-show-btn" onclick="toggleAns(${pi},${qi})">查看答案</button>
+      </div>`;
+    }).join("")}
+  </div>`;
+}
+
+function toggleAns(pi,qi){
+  const ans=document.getElementById(`pqa-${pi}-${qi}`);
+  const card=document.getElementById(`pqc-${pi}-${qi}`);
+  const show=ans.classList.toggle("show");
+  card.classList.toggle("ans-shown",show);
+  card.querySelector(".pq-show-btn").textContent=show?"隐藏答案":"查看答案";
+}
+
+// ========== AI 报告 ==========
+async function genReport(){
+  const btn=document.getElementById("rep-btn");
+  const c=document.getElementById("rep-container");
+  btn.disabled=true; btn.textContent="⏳ 生成中...";
+  c.innerHTML="<div class=\"spinner-wrap\"><div class=\"spinner\"></div></div>";
+  try{
+    const d=await(await fetch("/api/wrong-report?username=default")).json();
+    if(d.report) c.innerHTML=`<div style="font-size:0.78rem;color:#9ca3af;margin-bottom:10px">基于 ${d.total_wrong||0} 道错题生成</div><div class="report-box">${esc(d.report)}</div>`;
+  }catch(e){c.innerHTML="<div style=\"color:#dc2626;font-size:0.85rem\">生成失败</div>";}
+  finally{btn.disabled=false;btn.textContent="重新生成";}
+}
+
+function esc(s){return(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
+loadWrong();
+</script>
+</body>
+</html>

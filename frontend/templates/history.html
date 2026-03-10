@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>历史记录 - 拍照搜题系统</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f4f8; min-height: 100vh; }
+.navbar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); padding: 14px 24px; display: flex; align-items: center; justify-content: space-between; box-shadow: 0 2px 12px rgba(102,126,234,0.4); }
+.navbar h1 { color: #fff; font-size: 1.2rem; font-weight: 600; }
+.nav-links a { color: rgba(255,255,255,0.85); text-decoration: none; margin-left: 20px; font-size: 0.9rem; }
+.nav-links a:hover, .nav-links a.active { color: #fff; font-weight: 600; }
+.container { max-width: 880px; margin: 28px auto; padding: 0 16px; }
+.stats-row { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 18px; }
+.stat-card { background:#fff; border-radius:12px; padding:16px; box-shadow:0 2px 12px rgba(0,0,0,0.07); text-align:center; }
+.stat-num { font-size:1.6rem; font-weight:700; }
+.stat-label { font-size:0.75rem; color:#9ca3af; margin-top:2px; }
+.c-purple{color:#7c3aed;} .c-red{color:#dc2626;} .c-green{color:#059669;} .c-blue{color:#2563eb;}
+.filter-bar { background:#fff; border-radius:12px; padding:14px 18px; box-shadow:0 2px 12px rgba(0,0,0,0.07); margin-bottom:14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.filter-bar label { font-size:0.8rem; color:#6b7280; white-space:nowrap; }
+.filter-bar select, .filter-bar input { border:1.5px solid #e5e7eb; border-radius:8px; padding:7px 10px; font-size:0.82rem; outline:none; background:#f9fafb; color:#374151; transition:border-color 0.2s; }
+.filter-bar select:focus, .filter-bar input:focus { border-color:#667eea; }
+.f-sep { width:1px; height:22px; background:#e5e7eb; }
+.f-spacer { flex:1; min-width:8px; }
+.btn-sm { padding:7px 16px; border:none; border-radius:8px; font-size:0.82rem; font-weight:600; cursor:pointer; }
+.btn-pri { background:#667eea; color:#fff; } .btn-pri:hover { background:#5a67d8; }
+.btn-out { background:#f3f4f6; color:#374151; border:1.5px solid #e5e7eb; } .btn-out:hover { background:#e5e7eb; }
+.result-info { font-size:0.82rem; color:#6b7280; margin-bottom:10px; }
+.card { background:#fff; border-radius:14px; padding:18px 20px; box-shadow:0 2px 12px rgba(0,0,0,0.07); margin-bottom:11px; border:1.5px solid transparent; transition:all 0.2s; cursor:pointer; }
+.card:hover { border-color:#c4b5fd; }
+.card.wc { border-left:4px solid #fca5a5; background:#fffafa; }
+.card.expanded { border-color:#667eea; }
+.card-header { display:flex; align-items:flex-start; gap:12px; }
+.card-icon { width:36px; height:36px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:1.1rem; flex-shrink:0; }
+.i-ok { background:#ede9fe; } .i-wr { background:#fee2e2; }
+.card-main { flex:1; min-width:0; }
+.cq { font-size:0.88rem; color:#1f2937; font-weight:500; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; line-height:1.5; }
+.cq.full { white-space:normal; }
+.card-meta { display:flex; gap:6px; flex-wrap:wrap; margin-top:6px; align-items:center; }
+.tag { padding:2px 8px; border-radius:10px; font-size:0.72rem; font-weight:500; }
+.tp{background:#f3e8ff;color:#7c3aed;} .tr{background:#fef2f2;color:#dc2626;} .tg{background:#d1fae5;color:#059669;} .tb{background:#dbeafe;color:#1d4ed8;} .tgr{background:#f3f4f6;color:#6b7280;} .to{background:#ffedd5;color:#c2410c;}
+.ctime { font-size:0.72rem; color:#9ca3af; margin-left:auto; white-space:nowrap; }
+.card-detail { display:none; margin-top:14px; padding-top:14px; border-top:1px solid #f3f4f6; }
+.card-detail.show { display:block; }
+.dl { font-size:0.72rem; color:#9ca3af; font-weight:600; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px; margin-top:12px; }
+.dl:first-child { margin-top:0; }
+.db { font-size:0.85rem; line-height:1.7; border-radius:8px; padding:10px 12px; white-space:pre-wrap; }
+.dbg{background:#f8fafc;color:#374151;} .dbgr{background:#f0fdf4;color:#166534;border:1px solid #bbf7d0;} .dbb{background:#eff6ff;color:#1e40af;border:1px solid #93c5fd;}
+.kn-tags { display:flex; flex-wrap:wrap; gap:5px; }
+.kn-tag { padding:3px 10px; background:#f3e8ff; color:#7c3aed; border-radius:10px; font-size:0.75rem; }
+.card-actions { display:flex; gap:8px; margin-top:12px; }
+.abtn { padding:6px 14px; border-radius:7px; font-size:0.78rem; font-weight:600; cursor:pointer; border:none; transition:all 0.2s; }
+.abtn-wr { background:#fef2f2; color:#dc2626; border:1px solid #fca5a5; } .abtn-wr:hover { background:#fee2e2; }
+.abtn-dn { background:#f3f4f6; color:#9ca3af; cursor:default; }
+.empty-state { text-align:center; padding:60px 20px; color:#9ca3af; }
+.empty-icon { font-size:3.5rem; margin-bottom:12px; }
+.spinner-wrap { text-align:center; padding:40px; }
+.spinner { width:36px; height:36px; border:3px solid #e5e7eb; border-top-color:#667eea; border-radius:50%; animation:spin 0.8s linear infinite; margin:0 auto; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.pagination { display:flex; justify-content:center; gap:6px; margin-top:20px; padding-bottom:40px; }
+.page-btn { width:34px; height:34px; border-radius:8px; border:1.5px solid #e5e7eb; background:#fff; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; justify-content:center; color:#374151; transition:all 0.2s; }
+.page-btn:hover { border-color:#667eea; color:#667eea; }
+.page-btn.active { background:#667eea; color:#fff; border-color:#667eea; }
+.page-btn:disabled { opacity:0.4; cursor:not-allowed; }
+</style>
+</head>
+<body>
+<nav class="navbar">
+  <h1>📚 拍照搜题辅助学习系统</h1>
+  <div class="nav-links">
+    <a href="/">首页</a>
+    <a href="/history" class="active">历史记录</a>
+    <a href="/wrong-book">错题本</a>
+  </div>
+</nav>
+<div class="container">
+  <div class="stats-row">
+    <div class="stat-card"><div class="stat-num c-purple" id="s-total">-</div><div class="stat-label">总解题数</div></div>
+    <div class="stat-card"><div class="stat-num c-red" id="s-wrong">-</div><div class="stat-label">错题数</div></div>
+    <div class="stat-card"><div class="stat-num c-green" id="s-correct">-</div><div class="stat-label">正确数</div></div>
+    <div class="stat-card"><div class="stat-num c-blue" id="s-rate">-</div><div class="stat-label">正确率</div></div>
+  </div>
+  <div class="filter-bar">
+    <label>状态</label>
+    <select id="f-status">
+      <option value="all">全部</option>
+      <option value="wrong">仅错题</option>
+      <option value="correct">仅正确</option>
+    </select>
+    <div class="f-sep"></div>
+    <label>学科</label>
+    <select id="f-subject"><option value="all">全部学科</option></select>
+    <div class="f-sep"></div>
+    <label>题型</label>
+    <select id="f-type"><option value="all">全部题型</option></select>
+    <div class="f-sep"></div>
+    <label>难度</label>
+    <select id="f-diff">
+      <option value="all">全部</option>
+      <option value="简单">简单</option>
+      <option value="一般">一般</option>
+      <option value="较难">较难</option>
+      <option value="困难">困难</option>
+    </select>
+    <div class="f-sep"></div>
+    <label>来源</label>
+    <select id="f-src">
+      <option value="all">全部</option>
+      <option value="bank">题库命中</option>
+      <option value="ai">AI推理</option>
+    </select>
+    <div class="f-sep"></div>
+    <input type="text" id="f-kw" placeholder="🔍 关键词..." style="width:150px">
+    <div class="f-spacer"></div>
+    <button class="btn-sm btn-out" onclick="resetF()">重置</button>
+    <button class="btn-sm btn-pri" onclick="applyF()">筛选</button>
+  </div>
+  <div class="result-info" id="rinfo"></div>
+  <div id="records-container"><div class="spinner-wrap"><div class="spinner"></div></div></div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<script>
+const PS = 10;
+let all = [], filtered = [], page = 1;
+
+async function load() {
+  try {
+    const resp = await fetch('/api/history?username=default&limit=500');
+    const data = await resp.json();
+    all = data.records || [];
+    updateStats(all);
+    buildOpts(all);
+    applyF();
+  } catch(e) {
+    document.getElementById('records-container').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">⚠️</div><div>加载失败，请刷新重试</div></div>';
+  }
+}
+
+function updateStats(r) {
+  const t = r.length, w = r.filter(x => x.is_wrong).length, c = t - w;
+  document.getElementById('s-total').textContent = t;
+  document.getElementById('s-wrong').textContent = w;
+  document.getElementById('s-correct').textContent = c;
+  document.getElementById('s-rate').textContent = t > 0 ? Math.round(c / t * 100) + '%' : '-';
+}
+
+function buildOpts(r) {
+  const subs = [...new Set(r.map(x => x.subject).filter(Boolean))].sort();
+  const types = [...new Set(r.map(x => x.ques_type).filter(Boolean))].sort();
+  fillSel('f-subject', subs, '全部学科');
+  fillSel('f-type', types, '全部题型');
+}
+
+function fillSel(id, vals, ph) {
+  const s = document.getElementById(id);
+  s.innerHTML = '<option value="all">' + ph + '</option>';
+  vals.forEach(function(v) {
+    const o = document.createElement('option');
+    o.value = v; o.textContent = v; s.appendChild(o);
+  });
+}
+
+function applyF() {
+  const st = document.getElementById('f-status').value;
+  const sb = document.getElementById('f-subject').value;
+  const tp = document.getElementById('f-type').value;
+  const df = document.getElementById('f-diff').value;
+  const sc = document.getElementById('f-src').value;
+  const kw = document.getElementById('f-kw').value.trim().toLowerCase();
+
+  filtered = all.filter(function(r) {
+    if (st === 'wrong' && !r.is_wrong) return false;
+    if (st === 'correct' && r.is_wrong) return false;
+    if (sb !== 'all' && r.subject !== sb) return false;
+    if (tp !== 'all' && r.ques_type !== tp) return false;
+    if (df !== 'all' && r.ques_difficulty !== df) return false;
+    if (sc === 'bank' && !(r.similarity_score >= 0.7)) return false;
+    if (sc === 'ai' && r.similarity_score >= 0.7) return false;
+    if (kw && r.question_text.toLowerCase().indexOf(kw) === -1) return false;
+    return true;
+  });
+
+  page = 1;
+  const info = '共 ' + filtered.length + ' 条' +
+    (filtered.length < all.length ? '（从 ' + all.length + ' 条中筛选）' : '');
+  document.getElementById('rinfo').textContent = info;
+  render();
+}
+
+function resetF() {
+  ['f-status','f-subject','f-type','f-diff','f-src'].forEach(function(id) {
+    document.getElementById(id).value = 'all';
+  });
+  document.getElementById('f-kw').value = '';
+  applyF();
+}
+
+function render() {
+  const c = document.getElementById('records-container');
+  const rows = filtered.slice((page - 1) * PS, page * PS);
+  if (!filtered.length) {
+    c.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><div>暂无符合条件的记录</div></div>';
+    document.getElementById('pagination').innerHTML = '';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < rows.length; i++) {
+    html += buildCard(rows[i]);
+  }
+  c.innerHTML = html;
+  renderPag();
+}
+
+function buildCard(r) {
+  var sim = r.similarity_score ? Math.round(r.similarity_score * 100) : 0;
+  var time = r.created_at ? r.created_at.replace('T', ' ').substring(0, 16) : '';
+  var kns = (r.knowledges || []).slice(0, 4);
+  var m = r.matched_question;
+
+  var matchHtml = '';
+  if (m && sim >= 70) {
+    var ans = Array.isArray(m.ques_answer) ? m.ques_answer.join('、') : (m.ques_answer || '');
+    var analyze = m.ques_analyze || '';
+    matchHtml = '<div class="dl">题库原题与标准答案</div>' +
+      '<div class="db dbb">' + esc(m.ques_content || '') +
+      (ans ? '\n答案：' + esc(ans) : '') +
+      (analyze ? '\n解析：' + esc(analyze) : '') + '</div>';
+  }
+
+  var knHtml = '';
+  if (kns.length) {
+    var knTags = '';
+    for (var i = 0; i < kns.length; i++) {
+      knTags += '<span class="kn-tag">' + esc(kns[i]) + '</span>';
+    }
+    knHtml = '<div class="dl">知识点</div><div class="kn-tags">' + knTags + '</div>';
+  }
+
+  var wrongBtn = r.is_wrong
+    ? '<button class="abtn abtn-dn" disabled>✅ 已在错题本</button>'
+    : '<button class="abtn abtn-wr" onclick="markWrong(' + r.id + ');event.stopPropagation()" id="wb-' + r.id + '">❌ 加入错题本</button>';
+
+  return '<div class="card ' + (r.is_wrong ? 'wc' : '') + '" id="card-' + r.id + '" onclick="toggle(' + r.id + ')">' +
+    '<div class="card-header">' +
+      '<div class="card-icon ' + (r.is_wrong ? 'i-wr' : 'i-ok') + '">' + (r.is_wrong ? '❌' : '✅') + '</div>' +
+      '<div class="card-main">' +
+        '<div class="cq" id="q-' + r.id + '">' + esc(r.question_text) + '</div>' +
+        '<div class="card-meta">' +
+          (r.is_wrong ? '<span class="tag tr">错题</span>' : '<span class="tag tg">已解答</span>') +
+          (r.subject ? '<span class="tag tp">' + esc(r.subject) + '</span>' : '') +
+          (r.ques_type ? '<span class="tag to">' + esc(r.ques_type) + '</span>' : '') +
+          (r.ques_difficulty ? '<span class="tag tgr">' + esc(r.ques_difficulty) + '</span>' : '') +
+          (sim >= 70 ? '<span class="tag tb">题库 ' + sim + '%</span>' : '<span class="tag tb">AI推理</span>') +
+          '<span class="ctime">🕐 ' + time + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>' +
+    '<div class="card-detail" id="d-' + r.id + '">' +
+      '<div class="dl">题目全文</div>' +
+      '<div class="db dbg">' + esc(r.question_text) + '</div>' +
+      matchHtml +
+      '<div class="dl">AI 解析</div>' +
+      '<div class="db dbgr">' + esc(r.llm_answer || '暂无') + '</div>' +
+      knHtml +
+      '<div class="card-actions">' + wrongBtn + '</div>' +
+    '</div>' +
+  '</div>';
+}
+
+function toggle(id) {
+  document.getElementById('d-' + id).classList.toggle('show');
+  document.getElementById('card-' + id).classList.toggle('expanded');
+  document.getElementById('q-' + id).classList.toggle('full');
+}
+
+async function markWrong(id) {
+  var btn = document.getElementById('wb-' + id);
+  if (btn) { btn.disabled = true; btn.textContent = '⏳'; }
+  try {
+    var resp = await fetch('/api/mark-wrong', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({record_id: id, username: 'default'})
+    });
+    if (resp.ok) {
+      if (btn) { btn.className = 'abtn abtn-dn'; btn.textContent = '✅ 已在错题本'; }
+      var rec = all.find(function(x) { return x.id === id; });
+      if (rec) rec.is_wrong = true;
+      var card = document.getElementById('card-' + id);
+      if (card) card.classList.add('wc');
+      updateStats(all);
+    } else {
+      if (btn) { btn.disabled = false; btn.textContent = '❌ 加入错题本'; }
+    }
+  } catch(e) {
+    if (btn) { btn.disabled = false; btn.textContent = '❌ 加入错题本'; }
+  }
+}
+
+function renderPag() {
+  const total = Math.ceil(filtered.length / PS);
+  const p = document.getElementById('pagination');
+  if (total <= 1) { p.innerHTML = ''; return; }
+  var h = '<button class="page-btn" onclick="goP(' + (page-1) + ')" ' + (page===1?'disabled':'') + '>‹</button>';
+  for (var i = 1; i <= total; i++) {
+    if (i === 1 || i === total || Math.abs(i - page) <= 2) {
+      h += '<button class="page-btn ' + (i===page?'active':'') + '" onclick="goP(' + i + ')">' + i + '</button>';
+    } else if (Math.abs(i - page) === 3) {
+      h += '<span style="padding:0 4px;color:#9ca3af">…</span>';
+    }
+  }
+  h += '<button class="page-btn" onclick="goP(' + (page+1) + ')" ' + (page===total?'disabled':'') + '>›</button>';
+  p.innerHTML = h;
+}
+
+function goP(p) {
+  var total = Math.ceil(filtered.length / PS);
+  if (p < 1 || p > total) return;
+  page = p; render();
+  window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function esc(s) {
+  return (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+load();
+</script>
+</body>
+</html>
