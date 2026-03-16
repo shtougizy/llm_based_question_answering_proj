@@ -87,13 +87,14 @@
 用户上传图片
     │
     ▼
-InternVL3.5-2B
-    ├── 含图表 → 多模态直接解题 → 返回答案
-    └── 纯文字 → 提取题目文本
-                    │
-                    ▼
-             FAISS 向量检索
-                    │
+InternVL3.5-2B————勾选代码题可视化选项→提取题目文本→调用本地模板生成可视化HTML
+    ├── 含图表 → 多模态直接解题 → 返回答案                 │
+    │                                                   ▼
+    └── 纯文字 → 提取题目文本                          保存至SQLite
+                    │                                   │
+                    ▼                                   ▼
+             FAISS 向量检索                          返回给前端展示
+                    │ 
                     ▼
           Qwen3-1.7B (RAG 解答)
                     │
@@ -164,10 +165,15 @@ pip install -r requirements.txt
 ### 5. 启动服务
 
 ```bash
-uvicorn backend.main:app --reload --port 8000
+uvicorn backend.main:app --host 0.0.0.0 --port 8000
+```
+然后在另一个命令行中输入如下代码：
+
+```bash
+cloudflared tunnel --url http://localhost:8000
 ```
 
-访问 [http://localhost:8000](http://localhost:8000)
+复制粘贴并访问命令行中给出的随机网址即可在任意互联网上获得服务。
 
 ---
 
