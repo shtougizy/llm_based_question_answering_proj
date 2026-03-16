@@ -157,10 +157,27 @@ textarea:focus { border-color: #667eea; }
       </div>
 
       <!-- 程序题可视化 -->
-      <div class="viz-container" id="viz-section" style="display:none">
-        <div style="font-size:0.8rem;color:#9ca3af;margin-bottom:8px;">程序可视化</div>
-        <iframe id="viz-frame" sandbox="allow-scripts"></iframe>
+      <div class="action-bar">
+        <button class="btn btn-danger" id="mark-wrong-btn" onclick="markWrong()">❌ 加入错题本</button>
+        <button class="btn btn-outline" onclick="clearAll()">🔄 重新搜题</button>
       </div>
+    </div><!-- 结果卡片结束 -->
+
+    <!-- 程序题可视化独立卡片，仅勾选且生成成功时出现 -->
+    <div class="card" id="viz-section" style="display:none">
+      <div class="card-title">🖥️ 程序可视化</div>
+      <div style="font-size:0.8rem;color:#9ca3af;margin-bottom:10px;">
+        以下为该程序题的交互式可视化演示
+      </div>
+      <iframe id="viz-frame" sandbox="allow-scripts"
+        style="width:100%;height:480px;border:1.5px solid #e5e7eb;border-radius:10px;"></iframe>
+    </div>
+
+  </div><!-- result-section 结束 -->
+<!--      <div class="viz-container" id="viz-section" style="display:none">-->
+<!--        <div style="font-size:0.8rem;color:#9ca3af;margin-bottom:8px;">程序可视化</div>-->
+<!--        <iframe id="viz-frame" sandbox="allow-scripts"></iframe>-->
+<!--      </div>-->
 
       <div class="action-bar">
         <button class="btn btn-danger" id="mark-wrong-btn" onclick="markWrong()">❌ 加入错题本</button>
@@ -259,6 +276,10 @@ function showResult(data) {
     if (mq.ques_type) tags += '<span class="tag tag-orange">' + mq.ques_type + '</span>';
     if (mq.ques_difficulty) tags += '<span class="tag tag-blue">' + mq.ques_difficulty + '</span>';
   }
+  if (data.answered_by_vl) {
+    tags += '<span class="tag tag-purple">📊 图表解析</span>';
+  }
+  document.getElementById('result-meta').innerHTML = tags;
   document.getElementById('result-meta').innerHTML = tags;
 
   document.getElementById('result-question').textContent = data.question_text;
@@ -306,8 +327,10 @@ function showResult(data) {
   }
 
   // 程序题可视化
+
+  // 程序题可视化（独立 box，文字解析仍然保留）
   var vizSec = document.getElementById('viz-section');
-  if (data.visualization_html) {
+  if (data.visualization_html && data.visualization_html.trim().length > 50) {
     document.getElementById('viz-frame').srcdoc = data.visualization_html;
     vizSec.style.display = 'block';
   } else {

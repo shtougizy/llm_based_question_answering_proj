@@ -26,6 +26,19 @@ from core.retrieval import retrieve
 from core.multimodal import extract_question_from_image
 from core.llm import answer_question, generate_wrong_answer_report, generate_visualization_html
 from core.analysis import generate_cluster_practice_plan, cluster_weak_knowledge_points
+from fastapi.middleware.cors import CORSMiddleware
+
+app = FastAPI()
+
+# 添加这个配置
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # 调试时可以允许所有，生产环境建议指定具体域名
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
@@ -217,11 +230,22 @@ async def _solve_and_save(
     llm_thinking = llm_result.get("thinking", "")   # ← 新增
 
     # 修复可视化：判断条件放宽，只要勾选了就尝试生成
+    # 修复可视化：判断条件放宽，只要勾选了就尝试生成
     viz_html = None
     is_program_question = _is_program_question(question_text, best_match)
     if need_visualization and is_program_question:
         logger.info("生成程序题可视化 HTML")
         viz_html = generate_visualization_html(question_text, llm_answer)
+        # 确保是合法 HTML 字符串
+        if not isinstance(viz_html, str) or len(viz_html.strip()) < 50:
+            viz_html = None
+
+    # 安全合并知识点，确保最终是 list
+    bank_kns = (best_match.get("ques_knowledges") or []) if best_match else []
+    llm_kns = llm_result.get("knowledges") or []
+    if not isinstance(bank_kns, list): bank_kns = []
+    if not isinstance(llm_kns, list): llm_kns = []
+    merged_knowledges = list(set(bank_kns + llm_kns))
 
     record = save_solve_record(
         user_id=user.id,
@@ -235,17 +259,19 @@ async def _solve_and_save(
         subject=best_match.get("subject", "") if best_match else llm_result.get("subject", ""),
         ques_type=best_match.get("ques_type", "") if best_match else llm_result.get("ques_type", ""),
         ques_difficulty=best_match.get("ques_difficulty", "") if best_match else llm_result.get("ques_difficulty", ""),
-        knowledges=list(set(
-            (best_match.get("ques_knowledges") or []) +
-            (llm_result.get("knowledges") or [])
-        )) if best_match else (llm_result.get("knowledges") or []),
+        knowledges=merged_knowledges,  # ← 用安全合并后的结果
     )
-
+    # viz_html = None
+    # is_program_question = _is_program_question(question_text, best_match)
+    # if need_visualization and is_program_question:
+    #     logger.info("生成程序题可视化 HTML")
+    #     viz_html = generate_visualization_html(question_text, llm_answer)
+    #
     # record = save_solve_record(
     #     user_id=user.id,
     #     question_text=question_text,
     #     llm_answer=llm_answer,
-    #     llm_thinking=llm_thinking,                  # ← 新增
+    #     llm_thinking=llm_thinking,
     #     matched_question=best_match,
     #     similarity_score=similarity,
     #     image_path=image_path,
@@ -258,8 +284,6 @@ async def _solve_and_save(
     #         (llm_result.get("knowledges") or [])
     #     )) if best_match else (llm_result.get("knowledges") or []),
     # )
-
-    # # Step 4: 程序题可视化（可选）
 
     return {
         "record_id": record.id,
@@ -276,19 +300,6 @@ async def _solve_and_save(
         "answered_by_vl": has_figure and bool(vl_answer),  # 前端可据此显示"图表解析"标签
     }
 
-    # return {
-    #     "record_id": record.id,
-    #     "question_text": question_text,
-    #     "matched_from_bank": best_match is not None and similarity > 0.7,
-    #     "similarity": round(similarity, 4),
-    #     "matched_question": best_match,
-    #     "llm_answer": llm_answer,
-    #     "llm_thinking": llm_thinking,  # ← 新增，返回给前端
-    #     "knowledges": record.knowledges or [],  # ← 加这行，让前端能拿到知识点
-    #     "visualization_html": viz_html,
-    #     "retrieved_references": retrieved[:3],
-    #     "is_program_question": is_program_question,
-    # }
 
 
 def _is_program_question(text: str, matched: Optional[dict]) -> bool:
