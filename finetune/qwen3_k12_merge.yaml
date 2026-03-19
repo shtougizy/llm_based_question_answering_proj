@@ -1,0 +1,6 @@
+model_name_or_path: Qwen/Qwen3-1.7B
+adapter_name_or_path: /home/zsy/workspace/250606/code/work/260221_gd/finetune/output/qwen3-1.7b-k12-lora
+finetuning_type: lora
+export_dir: /home/zsy/workspace/250606/code/work/260221_gd/finetune/output/qwen3-1.7b-k12-merged
+export_size: 2
+export_legacy_format: false

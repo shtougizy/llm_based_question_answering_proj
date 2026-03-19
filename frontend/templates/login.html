@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>登录 - 拍照搜题系统</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body { font-family: "PingFang SC","Microsoft YaHei",sans-serif; background: linear-gradient(135deg,#667eea 0%,#764ba2 100%); min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+.card { background: #fff; border-radius: 20px; padding: 40px 36px; width: 100%; max-width: 400px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); }
+.logo { text-align: center; margin-bottom: 28px; }
+.logo h1 { font-size: 1.4rem; font-weight: 700; color: #374151; margin-top: 10px; }
+.logo p { font-size: 0.85rem; color: #9ca3af; margin-top: 4px; }
+.form-group { margin-bottom: 16px; }
+.form-group label { font-size: 0.82rem; color: #6b7280; font-weight: 500; display: block; margin-bottom: 6px; }
+.form-group input { width: 100%; border: 1.5px solid #e5e7eb; border-radius: 10px; padding: 11px 14px; font-size: 0.9rem; outline: none; transition: border-color 0.2s; }
+.form-group input:focus { border-color: #667eea; }
+.btn { width: 100%; padding: 13px; border: none; border-radius: 10px; font-size: 0.95rem; font-weight: 600; cursor: pointer; transition: all 0.2s; margin-top: 4px; }
+.btn-primary { background: linear-gradient(135deg,#667eea,#764ba2); color: #fff; box-shadow: 0 4px 12px rgba(102,126,234,0.35); }
+.btn-primary:hover { transform: translateY(-1px); }
+.btn-primary:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+.btn-guest { background: #f3f4f6; color: #6b7280; margin-top: 10px; }
+.btn-guest:hover { background: #e5e7eb; }
+.divider { text-align: center; color: #9ca3af; font-size: 0.8rem; margin: 16px 0; position: relative; }
+.divider::before, .divider::after { content: ""; position: absolute; top: 50%; width: 42%; height: 1px; background: #e5e7eb; }
+.divider::before { left: 0; } .divider::after { right: 0; }
+.footer-link { text-align: center; margin-top: 20px; font-size: 0.85rem; color: #6b7280; }
+.footer-link a { color: #667eea; text-decoration: none; font-weight: 500; }
+.alert { padding: 10px 14px; border-radius: 8px; font-size: 0.82rem; margin-bottom: 14px; display: none; }
+.alert-error { background: #fef2f2; color: #dc2626; border: 1px solid #fca5a5; }
+.alert-success { background: #f0fdf4; color: #059669; border: 1px solid #86efac; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <div style="font-size:2.5rem">📚</div>
+    <h1>拍照搜题系统</h1>
+    <p>登录你的账号继续学习</p>
+  </div>
+  <div class="alert alert-error" id="err-msg"></div>
+  <div class="alert alert-success" id="ok-msg"></div>
+  <div class="form-group">
+    <label>用户名</label>
+    <input type="text" id="username" placeholder="请输入用户名" autocomplete="username">
+  </div>
+  <div class="form-group">
+    <label>密码</label>
+    <input type="password" id="password" placeholder="请输入密码" autocomplete="current-password"
+      onkeydown="if(event.key==='Enter')doLogin()">
+  </div>
+  <button class="btn btn-primary" id="login-btn" onclick="doLogin()">登录</button>
+  <div class="divider">或</div>
+  <button class="btn btn-guest" onclick="doGuest()">👤 以游客身份访问</button>
+  <div class="footer-link">
+    还没有账号？<a href="/register">立即注册</a>
+  </div>
+</div>
+
+<script>
+function showErr(msg) {
+  var e = document.getElementById("err-msg");
+  e.textContent = msg; e.style.display = "block";
+  document.getElementById("ok-msg").style.display = "none";
+}
+function showOk(msg) {
+  var e = document.getElementById("ok-msg");
+  e.textContent = msg; e.style.display = "block";
+  document.getElementById("err-msg").style.display = "none";
+}
+
+async function doLogin() {
+  var username = document.getElementById("username").value.trim();
+  var password = document.getElementById("password").value;
+  if (!username || !password) { showErr("请填写用户名和密码"); return; }
+  var btn = document.getElementById("login-btn");
+  btn.disabled = true; btn.textContent = "登录中...";
+  try {
+    var resp = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({username, password})
+    });
+    var data = await resp.json();
+    if (!resp.ok) { showErr(data.detail || "登录失败"); return; }
+    localStorage.setItem("token", data.token);
+    localStorage.setItem("user", JSON.stringify(data.user));
+    showOk("登录成功，跳转中...");
+    setTimeout(function() { window.location.href = "/"; }, 800);
+  } catch(e) {
+    showErr("网络错误，请重试");
+  } finally {
+    btn.disabled = false; btn.textContent = "登录";
+  }
+}
+
+async function doGuest() {
+  var btn = document.querySelector(".btn-guest");
+  btn.disabled = true; btn.textContent = "进入中...";
+  try {
+    var resp = await fetch("/api/auth/guest", {method: "POST"});
+    var data = await resp.json();
+    sessionStorage.setItem("token", data.token);
+    sessionStorage.setItem("user", JSON.stringify(data.user));
+    window.location.href = "/";
+  } catch(e) {
+    showErr("网络错误，请重试");
+    btn.disabled = false; btn.textContent = "👤 以游客身份访问";
+  }
+}
+
+// 已登录则直接跳转
+var token = localStorage.getItem("token") || sessionStorage.getItem("token");
+if (token) { window.location.href = "/"; }
+</script>
+</body>
+</html>

@@ -28,6 +28,8 @@ from core.llm import answer_question, generate_wrong_answer_report, generate_vis
 from core.analysis import generate_cluster_practice_plan, cluster_weak_knowledge_points
 from fastapi.middleware.cors import CORSMiddleware
 
+from pydantic import BaseModel  # 如果还没有的话
+
 app = FastAPI()
 
 # 添加这个配置
@@ -57,10 +59,26 @@ templates = Jinja2Templates(directory=str(FRONTEND_DIR / "templates"))
 DEFAULT_USER = "default"
 
 
+# @app.on_event("startup")
+# async def startup():
+#     init_db()
+#     logger.info("系统启动完成")
 @app.on_event("startup")
 async def startup():
-    init_db()
-    logger.info("系统启动完成")
+    import asyncio
+    import asyncio
+    asyncio.create_task(cleanup_guest_users())
+    loop = asyncio.get_event_loop()
+    # 后台线程预加载，不阻塞服务启动
+    loop.run_in_executor(None, _preload_models)
+
+def _preload_models():
+    from core.multimodal import _load_model
+    from core.llm import _load_llm
+    logger.info("预加载模型...")
+    _load_llm()       # Qwen 先加载（快）
+    _load_model()     # InternVL 后加载（慢）
+    logger.info("模型预加载完成")
 
 
 # ==================== 前端页面路由 ====================
@@ -445,7 +463,259 @@ async def unmark_wrong_api(req: UnmarkWrongRequest):
     unmark_wrong(req.record_id, user.id)
     return {"success": True}
 
+# ==================== 认证依赖 ====================
+from fastapi import Depends
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+
+security = HTTPBearer(auto_error=False)
+
+def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials:
+        return None
+    from core.auth import decode_token
+    payload = decode_token(credentials.credentials)
+    return payload
+
+def require_login(credentials: HTTPAuthorizationCredentials = Depends(security)):
+    if not credentials:
+        raise HTTPException(status_code=401, detail="请先登录")
+    from core.auth import decode_token
+    payload = decode_token(credentials.credentials)
+    if not payload:
+        raise HTTPException(status_code=401, detail="Token 已过期，请重新登录")
+    if payload.get("is_guest"):
+        raise HTTPException(status_code=403, detail="游客无权限，请注册登录")
+    return payload
+
+
+# ==================== 注册接口 ====================
+
+class RegisterRequest(BaseModel):
+    username: str
+    password: str
+    phone: str
+    sms_code: str
+
+@app.post("/api/auth/send-sms")
+async def send_sms_code(phone: str):
+    import re
+    if not re.match(r"^1[3-9]\d{9}$", phone):
+        raise HTTPException(status_code=400, detail="手机号格式不正确")
+    from core.auth import generate_sms_code, send_sms
+    code = generate_sms_code(phone)
+    send_sms(phone, code)
+    return {"message": "验证码已发送", "dev_code": code}
+
+
+
+@app.post("/api/auth/register")
+async def register(req: RegisterRequest):
+    from core.auth import verify_sms_code, hash_password, create_access_token
+    from core.database import SessionLocal, User, UserAuth
+
+    if not verify_sms_code(req.phone, req.sms_code):
+        raise HTTPException(status_code=400, detail="验证码错误或已过期")
+
+    # 先计算好密码哈希（可能抛异常），再开始写库
+    hashed = hash_password(req.password)
+
+    with SessionLocal() as db:
+        if db.query(UserAuth).filter_by(username=req.username).first():
+            raise HTTPException(status_code=400, detail="用户名已存在")
+        if db.query(UserAuth).filter_by(email=req.phone).first():
+            raise HTTPException(status_code=400, detail="该手机号已注册")
+
+        # 在同一个事务里写 user 和 auth，任何一个失败都整体回滚
+        try:
+            user = User(username=req.username)
+            db.add(user)
+            db.flush()  # 获取 user.id，但不提交
+
+            auth = UserAuth(
+                user_id=user.id,
+                username=req.username,
+                email=req.phone,
+                hashed_password=hashed,
+                role="student",
+                is_active=True,
+            )
+            db.add(auth)
+            db.commit()
+            db.refresh(user)
+        except Exception as e:
+            db.rollback()
+            raise HTTPException(status_code=500, detail=f"注册失败：{str(e)}")
+
+        token = create_access_token(user.id, req.username, role="student")
+        return {
+            "token": token,
+            "user": {"id": user.id, "username": req.username, "role": "student"},
+            "message": "注册成功",
+        }
+
+# ==================== 登录接口 ====================
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+@app.post("/api/auth/login")
+async def login(req: LoginRequest):
+    from core.auth import verify_password, create_access_token
+    from core.database import SessionLocal, User, UserAuth
+    from datetime import datetime
+    with SessionLocal() as db:
+        auth = db.query(UserAuth).filter_by(username=req.username).first()
+        if not auth or not auth.hashed_password:
+            raise HTTPException(status_code=401, detail="用户名或密码错误")
+        if not auth.is_active:
+            raise HTTPException(status_code=403, detail="账号已被禁用")
+        from core.auth import verify_password
+        if not verify_password(req.password, auth.hashed_password):
+            raise HTTPException(status_code=401, detail="用户名或密码错误")
+        auth.last_login = datetime.utcnow()
+        db.commit()
+        token = create_access_token(auth.user_id, auth.username, role=auth.role)
+        return {"token": token, "user": {"id": auth.user_id, "username": auth.username, "role": auth.role}, "message": "登录成功"}
+
+
+# ==================== 游客接口 ====================
+
+@app.post("/api/auth/guest")
+async def guest_login():
+    import uuid
+    from core.auth import create_access_token
+    from core.database import SessionLocal, User, UserAuth
+    guest_id = f"guest_{uuid.uuid4().hex[:8]}"
+    with SessionLocal() as db:
+        user = User(username=guest_id)
+        db.add(user); db.commit(); db.refresh(user)
+        db.add(UserAuth(user_id=user.id, username=guest_id, role="guest", is_active=True))
+        db.commit()
+        token = create_access_token(user.id, guest_id, role="guest", is_guest=True, expires_minutes=1440)
+        return {"token": token, "user": {"id": user.id, "username": guest_id, "role": "guest"}}
+
+
+@app.get("/api/auth/me")
+async def get_me(payload: dict = Depends(get_current_user)):
+    if not payload:
+        raise HTTPException(status_code=401, detail="未登录")
+    from core.database import SessionLocal, UserAuth
+    with SessionLocal() as db:
+        auth = db.query(UserAuth).filter_by(user_id=int(payload["sub"])).first()
+        return {
+            "id": int(payload["sub"]),
+            "username": payload.get("username"),
+            "role": payload.get("role"),
+            "is_guest": payload.get("is_guest", False),
+            "phone": auth.email if auth else "",
+        }
+
+
+# ==================== 游客清理（在 startup 事件里调用）====================
+
+async def cleanup_guest_users():
+    import asyncio
+    from datetime import datetime, timedelta
+    from core.database import SessionLocal, User, UserAuth, SolveRecord, KnowledgeStat
+    while True:
+        await asyncio.sleep(3600)
+        try:
+            cutoff = datetime.utcnow() - timedelta(hours=24)
+            with SessionLocal() as db:
+                guests = db.query(UserAuth).filter(
+                    UserAuth.role == "guest",
+                    UserAuth.created_at < cutoff,
+                ).all()
+                for g in guests:
+                    uid = g.user_id
+                    db.query(KnowledgeStat).filter_by(user_id=uid).delete()
+                    db.query(SolveRecord).filter_by(user_id=uid).delete()
+                    db.query(UserAuth).filter_by(user_id=uid).delete()
+                    db.query(User).filter_by(id=uid).delete()
+                db.commit()
+                if guests:
+                    logger.info(f"清理了 {len(guests)} 个过期游客用户")
+        except Exception as e:
+            logger.error(f"游客清理失败: {e}")
+
+
+# ==================== 页面路由 ====================
+
+@app.get("/login")
+async def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+@app.get("/register")
+async def register_page(request: Request):
+    return templates.TemplateResponse("register.html", {"request": request})
 
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+# @app.get("/api/practice-by-knowledge")
+# async def practice_by_knowledge(
+#     knowledge: str,
+#     username: str = DEFAULT_USER,
+#     n: int = 3,
+# ):
+#     """按单个知识点从题库推荐练习题"""
+#     user = get_or_create_user(username)
+#     wrong_questions = get_wrong_questions(user.id)
+#
+#     # 构造一个只包含该知识点的虚拟 cluster
+#     from core.analysis import recommend_practice_questions
+#     cluster = {
+#         "label": knowledge,
+#         "knowledge_points": [knowledge],
+#         "knowledge_freq": {knowledge: 1},
+#         "wrong_count": 0,
+#         "severity": "中",
+#         "records": [],
+#         "subjects": [],
+#     }
+#     questions = recommend_practice_questions(cluster, n_questions=n)
+#
+#     return {
+#         "knowledge": knowledge,
+#         "questions": questions,
+#         "total": len(questions),
+#     }
+
+@app.get("/api/practice-by-knowledge")
+async def practice_by_knowledge(
+    knowledge: str,
+    username: str = DEFAULT_USER,
+    n: int = 3,
+):
+    from core.analysis import recommend_practice_questions
+    from core.llm import generate_practice_questions
+
+    user = get_or_create_user(username)
+
+    cluster = {
+        "label": knowledge,
+        "knowledge_points": [knowledge],
+        "knowledge_freq": {knowledge: 1},
+        "wrong_count": 0,
+        "severity": "中",
+        "records": [],
+        "subjects": [],
+    }
+    questions = recommend_practice_questions(cluster, n_questions=n)
+
+    # 题库没有匹配，改用 LLM 生成
+    if not questions:
+        logger.info(f"题库无匹配，LLM 生成「{knowledge}」练习题")
+        questions = generate_practice_questions(knowledge, n)
+        ai_generated = True
+    else:
+        ai_generated = False
+
+    return {
+        "knowledge": knowledge,
+        "questions": questions,
+        "total": len(questions),
+        "ai_generated": ai_generated,
+    }

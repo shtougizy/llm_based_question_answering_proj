@@ -299,6 +299,57 @@ def answer_question(question_text: str, retrieved: list) -> dict:
 #     }
 
 
+def generate_practice_questions(knowledge: str, n: int = 3) -> list:
+    """
+    根据知识点，让 LLM 生成 n 道练习题
+    返回格式与题库一致的列表
+    """
+    _load_llm()
+
+    resp = _llm.create_chat_completion(
+        messages=[
+            {"role": "system", "content": "/no_think 你是专业出题教师，根据知识点出题，格式严格按要求输出，不要多余内容。"},
+            {"role": "user", "content": f"""请针对知识点「{knowledge}」出{n}道练习题。
+
+每道题严格按如下格式输出，题目之间用"---"分隔：
+题目：<题目内容>
+答案：<答案>
+解析：<解析>
+难度：<简单/一般/较难>
+
+---"""}
+        ],
+        max_tokens=1200,
+        temperature=0.7,
+    )
+
+    raw = resp["choices"][0]["message"]["content"].strip()
+
+    import re
+    raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
+
+    # 解析每道题
+    questions = []
+    blocks = re.split(r'\n---+\n?', raw)
+    for block in blocks:
+        block = block.strip()
+        if not block:
+            continue
+        q = {}
+        for field, key in [('题目：', 'ques_content'), ('答案：', 'ques_answer'),
+                           ('解析：', 'ques_analyze'), ('难度：', 'ques_difficulty')]:
+            m = re.search(field + r'(.+?)(?=\n(?:题目|答案|解析|难度)：|$)', block, re.DOTALL)
+            if m:
+                q[key] = m.group(1).strip()
+        if q.get('ques_content'):
+            q['ques_knowledges'] = [knowledge]
+            q['subject'] = ''
+            q['ques_type'] = 'AI生成'
+            q['_ai_generated'] = True
+            questions.append(q)
+
+    return questions[:n]
+
 
 def generate_wrong_answer_report(
     wrong_questions: List[Dict[str, Any]],

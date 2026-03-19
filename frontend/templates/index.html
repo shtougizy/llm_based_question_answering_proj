@@ -78,6 +78,41 @@ textarea:focus { border-color: #667eea; }
   border-top: 1px solid #fde68a;
 }
 .thinking-body.show { display: block; }
+
+.nav-user{display:flex;align-items:center;gap:8px;margin-left:16px;}
+.nav-btn{padding:6px 16px;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;transition:all 0.2s;border:none;}
+.nav-btn-outline{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,0.6);}
+.nav-btn-outline:hover{background:rgba(255,255,255,0.15);}
+.nav-btn-primary{background:#fff;color:#667eea;}
+.nav-btn-primary:hover{background:#f3f4f6;}
+.nav-username{color:#fff;font-size:0.85rem;font-weight:500;}
+.nav-logout{color:rgba(255,255,255,0.7);font-size:0.82rem;cursor:pointer;background:none;border:none;padding:0;}
+.nav-logout:hover{color:#fff;}
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.2s;}
+.modal-overlay.show{opacity:1;pointer-events:all;}
+.modal-box{background:#fff;border-radius:20px;padding:36px;width:100%;max-width:400px;margin:16px;box-shadow:0 20px 60px rgba(0,0,0,0.2);transform:translateY(20px);transition:transform 0.2s;position:relative;}
+.modal-overlay.show .modal-box{transform:translateY(0);}
+.modal-close{position:absolute;top:14px;right:18px;background:none;border:none;font-size:1.4rem;color:#9ca3af;cursor:pointer;line-height:1;}
+.modal-close:hover{color:#374151;}
+.modal-tabs{display:flex;background:#f3f4f6;border-radius:10px;padding:3px;margin-bottom:24px;}
+.modal-tab{flex:1;padding:8px;border:none;background:transparent;border-radius:8px;font-size:0.88rem;font-weight:600;cursor:pointer;color:#6b7280;transition:all 0.2s;}
+.modal-tab.active{background:#fff;color:#374151;box-shadow:0 1px 4px rgba(0,0,0,0.1);}
+.modal-form{display:none;}
+.modal-form.active{display:block;}
+.mf-group{margin-bottom:14px;}
+.mf-group label{font-size:0.8rem;color:#6b7280;font-weight:500;display:block;margin-bottom:5px;}
+.mf-group input{width:100%;border:1.5px solid #e5e7eb;border-radius:9px;padding:10px 13px;font-size:0.88rem;outline:none;transition:border-color 0.2s;}
+.mf-group input:focus{border-color:#667eea;}
+.phone-row{display:flex;gap:8px;}
+.phone-row input{flex:1;}
+.sms-btn{padding:10px 12px;border:1.5px solid #667eea;border-radius:9px;background:transparent;color:#667eea;font-size:0.78rem;font-weight:600;cursor:pointer;white-space:nowrap;}
+.sms-btn:disabled{opacity:0.5;cursor:not-allowed;}
+.mf-submit{width:100%;padding:12px;border:none;border-radius:10px;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;font-size:0.92rem;font-weight:600;cursor:pointer;margin-top:4px;}
+.mf-submit:disabled{opacity:0.6;cursor:not-allowed;}
+.mf-guest{width:100%;padding:10px;border:1.5px solid #e5e7eb;border-radius:10px;background:#f9fafb;color:#6b7280;font-size:0.85rem;font-weight:500;cursor:pointer;margin-top:8px;}
+.mf-alert{padding:8px 12px;border-radius:8px;font-size:0.8rem;margin-bottom:12px;display:none;}
+.mf-alert-err{background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;}
+.mf-alert-ok{background:#f0fdf4;color:#059669;border:1px solid #86efac;}
 </style>
 </head>
 <body>
@@ -88,6 +123,10 @@ textarea:focus { border-color: #667eea; }
     <a href="/">首页</a>
     <a href="/history">历史记录</a>
     <a href="/wrong-book">错题本</a>
+    <div class="nav-user" id="nav-user">
+      <button class="nav-btn nav-btn-outline" onclick="showModal('login')">登录</button>
+      <button class="nav-btn nav-btn-primary" onclick="showModal('register')">注册</button>
+    </div>
   </div>
 </nav>
 
@@ -340,6 +379,11 @@ function showResult(data) {
   document.getElementById('result-section').style.display = 'block';
   document.getElementById('mark-wrong-btn').disabled = false;
   document.getElementById('mark-wrong-btn').textContent = '❌ 加入错题本';
+  // 游客第一次搜题后弹出登录引导
+  if (isGuest() && !window._firstSearch) {
+    window._firstSearch = true;
+    setTimeout(function() { showModal('login'); }, 1500);
+  }
 }
 
 function toggleThinking() {
@@ -384,5 +428,140 @@ function showError(msg) {
 function hideError() { document.getElementById('error-alert').style.display = 'none'; }
 function setSubmitDisabled(v) { document.getElementById('submit-btn').disabled = v; }
 </script>
+
+<div class="modal-overlay" id="auth-modal" onclick="closeModalOutside(event)">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal()">x</button>
+    <div class="modal-tabs">
+      <button class="modal-tab active" id="tab-login" onclick="switchModalTab('login')">登录</button>
+      <button class="modal-tab" id="tab-register" onclick="switchModalTab('register')">注册</button>
+    </div>
+    <div class="modal-form active" id="form-login">
+      <div class="mf-alert mf-alert-err" id="login-err"></div>
+      <div class="mf-alert mf-alert-ok" id="login-ok"></div>
+      <div class="mf-group"><label>用户名</label><input type="text" id="m-username" placeholder="请输入用户名"></div>
+      <div class="mf-group"><label>密码</label><input type="password" id="m-password" placeholder="请输入密码"></div>
+      <button class="mf-submit" id="m-login-btn" onclick="doModalLogin()">登录</button>
+      <button class="mf-guest" onclick="doModalGuest()">以游客身份继续</button>
+    </div>
+    <div class="modal-form" id="form-register">
+      <div class="mf-alert mf-alert-err" id="reg-err"></div>
+      <div class="mf-alert mf-alert-ok" id="reg-ok"></div>
+      <div class="mf-group"><label>用户名</label><input type="text" id="m-reg-username" placeholder="2-20位字母数字或中文"></div>
+      <div class="mf-group"><label>手机号</label>
+        <div class="phone-row">
+          <input type="tel" id="m-phone" placeholder="请输入手机号">
+          <button class="sms-btn" id="m-sms-btn" onclick="modalSendSms()">获取验证码</button>
+        </div>
+      </div>
+      <div class="mf-group"><label>验证码</label><input type="text" id="m-sms-code" placeholder="6位验证码" maxlength="6"></div>
+      <div class="mf-group"><label>密码</label><input type="password" id="m-reg-password" placeholder="至少8位"></div>
+      <div class="mf-group"><label>确认密码</label><input type="password" id="m-reg-password2" placeholder="再次输入密码"></div>
+      <button class="mf-submit" id="m-reg-btn" onclick="doModalRegister()">注册</button>
+      <button class="mf-guest" onclick="doModalGuest()">以游客身份继续</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function getToken(){return localStorage.getItem('token')||sessionStorage.getItem('token');}
+function getUser(){var u=localStorage.getItem('user')||sessionStorage.getItem('user');try{return u?JSON.parse(u):null;}catch(e){return null;}}
+function isGuest(){var u=getUser();return u&&u.role==='guest';}
+function isLoggedIn(){return !!getToken()&&!!getUser();}
+
+function updateNavUser(){
+  var el=document.getElementById('nav-user');
+  var user=getUser();
+  if(!el)return;
+  if(user&&user.role!=='guest'){
+    el.innerHTML='<span class="nav-username">👤 '+user.username+'</span><button class="nav-logout" onclick="doLogout()">退出</button>';
+  } else if(user&&user.role==='guest'){
+    el.innerHTML='<span class="nav-username" style="color:rgba(255,255,255,0.6)">游客</span><button class="nav-btn nav-btn-outline" onclick="showModal(\'login\')">登录</button><button class="nav-btn nav-btn-primary" onclick="showModal(\'register\')">注册</button>';
+  } else {
+    el.innerHTML='<button class="nav-btn nav-btn-outline" onclick="showModal(\'login\')">登录</button><button class="nav-btn nav-btn-primary" onclick="showModal(\'register\')">注册</button>';
+  }
+}
+function doLogout(){
+  localStorage.removeItem('token');localStorage.removeItem('user');
+  sessionStorage.removeItem('token');sessionStorage.removeItem('user');
+  updateNavUser();
+}
+function showModal(tab){document.getElementById('auth-modal').classList.add('show');switchModalTab(tab||'login');}
+function closeModal(){document.getElementById('auth-modal').classList.remove('show');}
+function closeModalOutside(e){if(e.target===document.getElementById('auth-modal'))closeModal();}
+function switchModalTab(tab){
+  document.getElementById('form-login').classList.toggle('active',tab==='login');
+  document.getElementById('form-register').classList.toggle('active',tab==='register');
+  document.getElementById('tab-login').classList.toggle('active',tab==='login');
+  document.getElementById('tab-register').classList.toggle('active',tab==='register');
+}
+function checkAndShowModal(){if(!isLoggedIn())showModal('login');}
+function mfAlert(id,msg,type){
+  var el=document.getElementById(id);if(!el)return;
+  el.textContent=msg;el.className='mf-alert '+(type==='ok'?'mf-alert-ok':'mf-alert-err');el.style.display='block';
+}
+async function doModalLogin(){
+  var u=document.getElementById('m-username').value.trim();
+  var p=document.getElementById('m-password').value;
+  if(!u||!p){mfAlert('login-err','请填写用户名和密码');return;}
+  var btn=document.getElementById('m-login-btn');btn.disabled=true;btn.textContent='登录中...';
+  try{
+    var resp=await fetch('/api/auth/login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:p})});
+    var data=await resp.json();
+    if(!resp.ok){mfAlert('login-err',data.detail||'登录失败');return;}
+    localStorage.setItem('token',data.token);localStorage.setItem('user',JSON.stringify(data.user));
+    mfAlert('login-ok','登录成功！','ok');
+    setTimeout(function(){closeModal();updateNavUser();},800);
+  }catch(e){mfAlert('login-err','网络错误，请重试');}
+  finally{btn.disabled=false;btn.textContent='登录';}
+}
+var _smsTimer=null;
+async function modalSendSms(){
+  var phone=document.getElementById('m-phone').value.trim();
+  if(!/^1[3-9][0-9]{9}$/.test(phone)){mfAlert('reg-err','请输入正确的手机号');return;}
+  var btn=document.getElementById('m-sms-btn');btn.disabled=true;
+  try{
+    var resp=await fetch('/api/auth/send-sms?phone='+phone,{method:'POST'});
+    var data=await resp.json();
+    if(!resp.ok){mfAlert('reg-err',data.detail||'发送失败');btn.disabled=false;return;}
+    mfAlert('reg-ok','验证码已发送（开发模式：'+(data.dev_code||'见日志')+'）','ok');
+    var count=60;
+    _smsTimer=setInterval(function(){btn.textContent=count+'s';count--;if(count<0){clearInterval(_smsTimer);btn.disabled=false;btn.textContent='获取验证码';}},1000);
+  }catch(e){mfAlert('reg-err','网络错误');btn.disabled=false;}
+}
+async function doModalRegister(){
+  var u=document.getElementById('m-reg-username').value.trim();
+  var ph=document.getElementById('m-phone').value.trim();
+  var sc=document.getElementById('m-sms-code').value.trim();
+  var pw=document.getElementById('m-reg-password').value;
+  var pw2=document.getElementById('m-reg-password2').value;
+  if(!u||u.length<2){mfAlert('reg-err','用户名至少2位');return;}
+  if(!/^1[3-9][0-9]{9}$/.test(ph)){mfAlert('reg-err','请输入正确的手机号');return;}
+  if(!sc||sc.length!==6){mfAlert('reg-err','请输入6位验证码');return;}
+  if(pw.length<8){mfAlert('reg-err','密码至少8位');return;}
+  if(pw!==pw2){mfAlert('reg-err','两次密码不一致');return;}
+  var btn=document.getElementById('m-reg-btn');btn.disabled=true;btn.textContent='注册中...';
+  try{
+    var resp=await fetch('/api/auth/register',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:u,password:pw,phone:ph,sms_code:sc})});
+    var data=await resp.json();
+    if(!resp.ok){mfAlert('reg-err',data.detail||'注册失败');return;}
+    localStorage.setItem('token',data.token);localStorage.setItem('user',JSON.stringify(data.user));
+    mfAlert('reg-ok','注册成功！','ok');
+    setTimeout(function(){closeModal();updateNavUser();},800);
+  }catch(e){mfAlert('reg-err','网络错误，请重试');}
+  finally{btn.disabled=false;btn.textContent='注册';}
+}
+async function doModalGuest(){
+  try{
+    var resp=await fetch('/api/auth/guest',{method:'POST'});
+    var data=await resp.json();
+    sessionStorage.setItem('token',data.token);sessionStorage.setItem('user',JSON.stringify(data.user));
+    closeModal();updateNavUser();
+  }catch(e){alert('网络错误，请重试');}
+}
+updateNavUser();
+setTimeout(checkAndShowModal,500);
+</script>
+
 </body>
 </html>

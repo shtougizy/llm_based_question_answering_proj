@@ -1,0 +1,14 @@
+model_name_or_path: Qwen/Qwen3-1.7B
+adapter_name_or_path: /home/zsy/workspace/250606/code/work/260221_gd/finetune/output/qwen3-1.7b-k12-lora
+trust_remote_code: true
+stage: sft
+do_predict: true
+finetuning_type: lora
+quantization_bit: 8
+quantization_method: bitsandbytes
+dataset: k12_val
+cutoff_len: 1024
+per_device_eval_batch_size: 2
+predict_with_generate: true
+max_new_tokens: 512
+output_dir: /home/zsy/workspace/250606/code/work/260221_gd/finetune/output/eval_results

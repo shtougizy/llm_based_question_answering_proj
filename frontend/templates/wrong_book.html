@@ -97,6 +97,20 @@ body { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: #f
 .badge-high{background:#fef2f2;color:#dc2626;} .badge-mid{background:#fffbeb;color:#d97706;} .badge-low{background:#f0fdf4;color:#059669;}
 .kn-freq-grid{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:12px;}
 .kn-freq-item{background:#f3f4f6;border-radius:8px;padding:5px 10px;font-size:0.78rem;color:#374151;display:flex;align-items:center;gap:5px;}
+.kn-practice-btn {
+  margin-left: 6px;
+  padding: 2px 8px;
+  border: 1px solid #a78bfa;
+  background: #f3e8ff;
+  color: #7c3aed;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+.kn-practice-btn:hover { background: #7c3aed; color: #fff; }
 .kn-freq-count{background:#667eea;color:#fff;border-radius:10px;padding:0 6px;font-size:0.7rem;font-weight:700;}
 .practice-section{margin-bottom:28px;}
 .practice-cluster-header{background:#fff;border-radius:12px;padding:16px 18px;box-shadow:0 2px 12px rgba(0,0,0,0.07);margin-bottom:12px;display:flex;align-items:center;gap:12px;}
@@ -483,21 +497,81 @@ async function loadClusters(){
   finally{btn.disabled=false;btn.textContent="重新分析";}
 }
 
-function buildClusterCard(cl){
-  const sc=cl.severity==="高"?"sev-high":cl.severity==="中"?"sev-mid":"sev-low";
-  const bc=cl.severity==="高"?"badge-high":cl.severity==="中"?"badge-mid":"badge-low";
-  const icon=cl.severity==="高"?"🔴":cl.severity==="中"?"🟡":"🟢";
-  const fe=Object.entries(cl.knowledge_freq||{}).sort((a,b)=>b[1]-a[1]).slice(0,8);
-  return `<div class="cluster-card ${sc}">
+async function practiceByKn(knowledge) {
+  switchTab(2);
+  const c = document.getElementById('practice-container');
+  const btn = document.getElementById('prac-btn');
+  c.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>';
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ 生成中...'; }
+  try {
+    const d = await (await fetch(
+      '/api/practice-by-knowledge?knowledge=' + encodeURIComponent(knowledge) + '&username=default&n=3'
+    )).json();
+    if (!d.questions || !d.questions.length) {
+      c.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><div>暂无「' + knowledge + '」相关题目</div></div>';
+      return;
+    }
+    var fakePlan = [{
+      cluster_id: 0, label: knowledge, knowledge_points: [knowledge],
+      wrong_count: 0, severity: '中', subjects: [], practice_questions: d.questions,
+    }];
+    var tip = d.ai_generated
+      ? '<div style="font-size:0.82rem;color:#7c3aed;margin-bottom:12px;padding:8px 12px;background:#f3e8ff;border-radius:8px;">✨ 以下为 AI 针对「' + knowledge + '」生成的练习题</div>'
+      : '<div style="font-size:0.82rem;color:#6b7280;margin-bottom:12px;">📌 以下为「' + knowledge + '」的专项练习题</div>';
+    c.innerHTML = tip + fakePlan.map(function(p, pi) { return buildPracticeSection(p, pi); }).join('');
+  } catch(e) {
+    c.innerHTML = '<div style="color:#dc2626;font-size:0.85rem">生成失败：' + e.message + '</div>';
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '重新生成'; }
+  }
+}
+
+function buildClusterCard(cl) {
+  const sevClass = cl.severity==='高'?'sev-high':cl.severity==='中'?'sev-mid':'sev-low';
+  const badgeClass = cl.severity==='高'?'badge-high':cl.severity==='中'?'badge-mid':'badge-low';
+  const icon = cl.severity==='高'?'🔴':cl.severity==='中'?'🟡':'🟢';
+  const freqEntries = Object.entries(cl.knowledge_freq||{}).sort((a,b)=>b[1]-a[1]).slice(0,8);
+
+  const freqHtml = freqEntries.length ? `
+    <div style="font-size:0.78rem;color:#6b7280;margin-bottom:8px;font-weight:600">知识点出错频率（点击知识点可一键生成练习）</div>
+    <div class="kn-freq-grid">
+      ${freqEntries.map(([k,v])=>`
+        <div class="kn-freq-item">
+          <span>${k}</span>
+          <span class="kn-freq-count">${v}</span>
+          <button class="kn-practice-btn" onclick="practiceByKn('${k.replace(/'/g,"\\'")}')">练习</button>
+        </div>`).join('')}
+    </div>` : '';
+
+  return `<div class="cluster-card ${sevClass}">
     <div class="cluster-header">
-      <div style="font-size:1.6rem">${icon}</div>
-      <div><div class="cluster-title">知识群：${cl.label}</div><div class="cluster-sub">涉及 ${cl.subjects.join("、")||"未分类"} · 错题 ${cl.wrong_count} 道</div></div>
-      <span class="cluster-badge ${bc}">薄弱程度：${cl.severity}</span>
+      <div class="cluster-icon">${icon}</div>
+      <div>
+        <div class="cluster-title">知识群：${cl.label}</div>
+        <div class="cluster-sub">涉及 ${cl.subjects.join('、')||'未分类'} · 错题 ${cl.wrong_count} 道</div>
+      </div>
+      <span class="cluster-badge ${badgeClass}">薄弱程度：${cl.severity}</span>
     </div>
-    ${fe.length?`<div style="font-size:0.78rem;color:#6b7280;margin-bottom:8px;font-weight:600">知识点出错频率</div><div class="kn-freq-grid">${fe.map(([k,v])=>`<div class="kn-freq-item">${k}<span class="kn-freq-count">${v}</span></div>`).join("")}</div>`:""}
-    <div style="font-size:0.78rem;color:#9ca3af">💡 切换到「练习推荐」标签获取针对性练习题。</div>
+    ${freqHtml}
+    <div style="font-size:0.78rem;color:#9ca3af">💡 建议：重点复习以上知识点，或点击「练习」直接生成针对性题目。</div>
   </div>`;
 }
+
+<!--function buildClusterCard(cl){-->
+<!--  const sc=cl.severity==="高"?"sev-high":cl.severity==="中"?"sev-mid":"sev-low";-->
+<!--  const bc=cl.severity==="高"?"badge-high":cl.severity==="中"?"badge-mid":"badge-low";-->
+<!--  const icon=cl.severity==="高"?"🔴":cl.severity==="中"?"🟡":"🟢";-->
+<!--  const fe=Object.entries(cl.knowledge_freq||{}).sort((a,b)=>b[1]-a[1]).slice(0,8);-->
+<!--  return `<div class="cluster-card ${sc}">-->
+<!--    <div class="cluster-header">-->
+<!--      <div style="font-size:1.6rem">${icon}</div>-->
+<!--      <div><div class="cluster-title">知识群：${cl.label}</div><div class="cluster-sub">涉及 ${cl.subjects.join("、")||"未分类"} · 错题 ${cl.wrong_count} 道</div></div>-->
+<!--      <span class="cluster-badge ${bc}">薄弱程度：${cl.severity}</span>-->
+<!--    </div>-->
+<!--    ${fe.length?`<div style="font-size:0.78rem;color:#6b7280;margin-bottom:8px;font-weight:600">知识点出错频率</div><div class="kn-freq-grid">${fe.map(([k,v])=>`<div class="kn-freq-item">${k}<span class="kn-freq-count">${v}</span></div>`).join("")}</div>`:""}-->
+<!--    <div style="font-size:0.78rem;color:#9ca3af">💡 切换到「练习推荐」标签获取针对性练习题。</div>-->
+<!--  </div>`;-->
+<!--}-->
 
 // ========== 练习推荐 ==========
 async function loadPractice(){

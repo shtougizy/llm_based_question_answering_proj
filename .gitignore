@@ -1,17 +1,36 @@
-# 模型文件
+# ===== 模型文件（体积过大）=====
 data/models/
 *.gguf
 *.bin.tmp
+*.safetensors
 
-# 数据库（用户数据）
+# ===== 数据库（用户数据）=====
 data/app.db
 *.db
 *.sqlite
 
-# 用户上传图片
+# ===== 用户上传图片 =====
 data/uploads/
 
-# Python 缓存
+# ===== 题库数据（体积较大）=====
+data/faiss_index.bin
+data/faiss_meta.json
+data/question_bank.json
+
+# ===== 微调产物（体积过大）=====
+finetune/cleaned_data.json
+finetune/train.json
+finetune/train_small.json
+finetune/val.json
+finetune/test.json
+finetune/test_with_meta.json
+finetune/output/
+
+# ===== LLaMA-Factory & llama.cpp（第三方库，不提交）=====
+LLaMA-Factory/
+llama.cpp/
+
+# ===== Python 缓存 =====
 __pycache__/
 *.pyc
 *.pyo
@@ -20,15 +39,16 @@ dist/
 build/
 .env
 
-# HuggingFace 缓存
+# ===== HuggingFace 缓存 =====
 .cache/
 
-# Windows WSL 元数据
+# ===== Windows WSL 元数据 =====
 *.Zone.Identifier
 
-# IDE
+# ===== IDE =====
 .vscode/
 .idea/
 
-# 日志
+# ===== 日志 =====
 *.log
+logs/

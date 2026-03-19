@@ -14,11 +14,8 @@ INTERNVL_MODEL_PATH = os.getenv(
 )
 
 # Qwen3-1.7B GGUF 文件路径
-QWEN_GGUF_PATH = os.getenv(
-    "QWEN_GGUF_PATH",
-    "/home/zsy/workspace/250606/code/work/260221_gd/data/models/qwen3-1.7b-q4_k_m.gguf/Qwen3-1.7B-Q8_0.gguf"
+QWEN_GGUF_PATH = os.getenv("QWEN_GGUF_PATH", "/home/zsy/workspace/250606/code/work/260221_gd/finetune/output/qwen3-1.7b-k12-Q8_0.gguf")
 
-)
 
 # ============ 数据路径 ============
 QUESTION_BANK_PATH = str(BASE_DIR / "data" / "question_bank.json")
