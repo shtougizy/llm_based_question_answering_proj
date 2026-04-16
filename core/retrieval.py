@@ -28,7 +28,7 @@ def _load_embedder():
         return
     from sentence_transformers import SentenceTransformer
     logger.info(f"加载向量编码模型: {EMBEDDING_MODEL}")
-    _embedder = SentenceTransformer(EMBEDDING_MODEL)
+    _embedder = SentenceTransformer(EMBEDDING_MODEL, local_files_only=True)
     logger.info("向量编码模型加载完成")
 
 

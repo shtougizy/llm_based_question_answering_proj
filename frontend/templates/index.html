@@ -7,14 +7,57 @@
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif; background: #f0f4f8; min-height: 100vh; }
+.hamburger-btn {
+  background: none; border: none; cursor: pointer;
+  padding: 6px 10px; border-radius: 8px;
+  display: flex; flex-direction: column; gap: 5px;
+  transition: background 0.2s;
+}
+.hamburger-btn:hover { background: rgba(255,255,255,0.15); }
+.hamburger-btn span {
+  display: block; width: 22px; height: 2px;
+  background: #fff; border-radius: 2px; transition: all 0.3s;
+}
+.hamburger-btn.open span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+.hamburger-btn.open span:nth-child(2) { opacity: 0; }
+.hamburger-btn.open span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+.side-menu {
+  position: fixed; top: 0; left: -280px; width: 260px; height: 100vh;
+  background: #fff; box-shadow: 4px 0 24px rgba(0,0,0,0.12);
+  z-index: 1000; transition: left 0.28s cubic-bezier(.4,0,.2,1);
+  display: flex; flex-direction: column; padding-top: 0;
+}
+.side-menu.open { left: 0; }
+.side-menu-header {
+  background: linear-gradient(135deg,#667eea,#764ba2);
+  padding: 48px 24px 24px; color: #fff;
+}
+.side-menu-title { font-size: 1.1rem; font-weight: 700; display: block; }
+.side-menu-user { font-size: 0.82rem; opacity: 0.85; display: block; margin-top: 4px; }
+.side-menu-body { flex: 1; padding: 12px 0; overflow-y: auto; }
+.side-menu-item {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 24px; color: #374151; text-decoration: none;
+  font-size: 0.92rem; font-weight: 500; transition: background 0.15s; cursor: pointer;
+  border: none; background: none; width: 100%; text-align: left;
+}
+.side-menu-item:hover { background: #f3f4f6; color: #667eea; }
+.side-menu-item .item-icon { font-size: 1.1rem; width: 24px; text-align: center; }
+.side-menu-divider { height: 1px; background: #f3f4f6; margin: 8px 0; }
+.side-menu-footer { padding: 16px 24px; border-top: 1px solid #f3f4f6; }
+.side-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,0.35);
+  z-index: 999; display: none; opacity: 0; transition: opacity 0.25s;
+}
+.side-overlay.open { display: block; opacity: 1; }
 .navbar {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   padding: 14px 24px; display: flex; align-items: center; justify-content: space-between;
   box-shadow: 0 2px 12px rgba(102,126,234,0.4);
 }
 .navbar h1 { color: #fff; font-size: 1.2rem; font-weight: 600; }
-.nav-links a { color: rgba(255,255,255,0.85); text-decoration: none; margin-left: 20px; font-size: 0.9rem; transition: color 0.2s; }
-.nav-links a:hover { color: #fff; }
+<!--.nav-links a { color: rgba(255,255,255,0.85); text-decoration: none; margin-left: 20px; font-size: 0.9rem; transition: color 0.2s; }-->
+<!--.nav-links a:hover { color: #fff; }-->
 .container { max-width: 800px; margin: 32px auto; padding: 0 16px; }
 .card { background: #fff; border-radius: 16px; padding: 28px; box-shadow: 0 4px 24px rgba(0,0,0,0.08); margin-bottom: 20px; }
 .card-title { font-size: 1rem; font-weight: 600; color: #374151; margin-bottom: 18px; display: flex; align-items: center; gap: 8px; }
@@ -79,15 +122,26 @@ textarea:focus { border-color: #667eea; }
 }
 .thinking-body.show { display: block; }
 
-.nav-user{display:flex;align-items:center;gap:8px;margin-left:16px;}
-.nav-btn{padding:6px 16px;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;transition:all 0.2s;border:none;}
-.nav-btn-outline{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,0.6);}
-.nav-btn-outline:hover{background:rgba(255,255,255,0.15);}
-.nav-btn-primary{background:#fff;color:#667eea;}
-.nav-btn-primary:hover{background:#f3f4f6;}
-.nav-username{color:#fff;font-size:0.85rem;font-weight:500;}
-.nav-logout{color:rgba(255,255,255,0.7);font-size:0.82rem;cursor:pointer;background:none;border:none;padding:0;}
-.nav-logout:hover{color:#fff;}
+.navbar {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  padding: 0 20px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  box-shadow: 0 2px 12px rgba(102,126,234,0.3);
+}
+<!--.nav-user{display:flex;align-items:center;gap:8px;margin-left:16px;}-->
+<!--.nav-btn{padding:6px 16px;border-radius:8px;font-size:0.82rem;font-weight:600;cursor:pointer;transition:all 0.2s;border:none;}-->
+<!--.nav-btn-outline{background:transparent;color:#fff;border:1.5px solid rgba(255,255,255,0.6);}-->
+<!--.nav-btn-outline:hover{background:rgba(255,255,255,0.15);}-->
+<!--.nav-btn-primary{background:#fff;color:#667eea;}-->
+<!--.nav-btn-primary:hover{background:#f3f4f6;}-->
+<!--.nav-username{color:#fff;font-size:0.85rem;font-weight:500;}-->
+<!--.nav-logout{color:rgba(255,255,255,0.7);font-size:0.82rem;cursor:pointer;background:none;border:none;padding:0;}-->
+<!--.nav-logout:hover{color:#fff;}-->
 .modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:1000;display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity 0.2s;}
 .modal-overlay.show{opacity:1;pointer-events:all;}
 .modal-box{background:#fff;border-radius:20px;padding:36px;width:100%;max-width:400px;margin:16px;box-shadow:0 20px 60px rgba(0,0,0,0.2);transform:translateY(20px);transition:transform 0.2s;position:relative;}
@@ -117,18 +171,58 @@ textarea:focus { border-color: #667eea; }
 </head>
 <body>
 
+<!--<nav class="navbar">-->
+<!--  <h1>📚 拍照搜题辅助学习系统</h1>-->
+<!--  <div class="nav-links">-->
+<!--    <a href="/">首页</a>-->
+<!--    <a href="/history">历史记录</a>-->
+<!--    <a href="/wrong-book">错题本</a>-->
+<!--    <div class="nav-user" id="nav-user">-->
+<!--      <button class="nav-btn nav-btn-outline" onclick="showModal('login')">登录</button>-->
+<!--      <button class="nav-btn nav-btn-primary" onclick="showModal('register')">注册</button>-->
+<!--    </div>-->
+<!--  </div>-->
+<!--</nav>-->
+
 <nav class="navbar">
-  <h1>📚 拍照搜题辅助学习系统</h1>
-  <div class="nav-links">
-    <a href="/">首页</a>
-    <a href="/history">历史记录</a>
-    <a href="/wrong-book">错题本</a>
-    <div class="nav-user" id="nav-user">
-      <button class="nav-btn nav-btn-outline" onclick="showModal('login')">登录</button>
-      <button class="nav-btn nav-btn-primary" onclick="showModal('register')">注册</button>
-    </div>
-  </div>
+  <!-- 汉堡菜单按钮 -->
+  <button class="hamburger-btn" id="hamburger-btn" onclick="toggleSideMenu()" aria-label="菜单">
+    <span></span><span></span><span></span>
+  </button>
+  <h1 style="color:#fff;font-size:1.2rem;font-weight:600;margin-left:12px;">📚 拍照搜题</h1>
 </nav>
+
+<!-- 侧边遮罩 -->
+<div class="side-overlay" id="side-overlay" onclick="closeSideMenu()"></div>
+
+<!-- 侧边菜单 -->
+<div class="side-menu" id="side-menu">
+  <div class="side-menu-header">
+    <span class="side-menu-title">📚 拍照搜题</span>
+    <span class="side-menu-user" id="side-user-name">游客</span>
+  </div>
+  <div class="side-menu-body">
+    <a class="side-menu-item" href="/">
+      <span class="item-icon">🔍</span> 首页搜题
+    </a>
+    <a class="side-menu-item" href="/history">
+      <span class="item-icon">📋</span> 历史记录
+    </a>
+    <a class="side-menu-item" href="/wrong-book">
+      <span class="item-icon">📕</span> 错题本
+    </a>
+    <div class="side-menu-divider"></div>
+    <button class="side-menu-item" id="menu-login-btn" onclick="showModal('login');closeSideMenu()">
+      <span class="item-icon">🔑</span> 登录
+    </button>
+    <button class="side-menu-item" id="menu-register-btn" onclick="showModal('register');closeSideMenu()">
+      <span class="item-icon">👤</span> 注册
+    </button>
+    <button class="side-menu-item" id="menu-logout-btn" style="display:none;color:#dc2626;" onclick="logout();closeSideMenu()">
+      <span class="item-icon">🚪</span> 退出登录
+    </button>
+  </div>
+</div>
 
 <div class="container">
   <!-- 输入卡片 -->
@@ -189,9 +283,8 @@ textarea:focus { border-color: #667eea; }
       <div style="font-size:0.8rem;color:#9ca3af;margin-bottom:6px;">AI 解析</div>
       <div class="answer-box" id="result-answer"></div>
 
-      <!-- 知识点 -->
-      <div id="knowledge-section" style="margin-top:14px;display:none">
-        <div style="font-size:0.8rem;color:#9ca3af;margin-bottom:6px;">涉及知识点</div>
+      <!-- 知识点（已隐藏）-->
+      <div id="knowledge-section" style="display:none">
         <div class="knowledge-tags" id="knowledge-tags"></div>
       </div>
 
@@ -229,6 +322,49 @@ textarea:focus { border-color: #667eea; }
 <script>
 let currentRecordId = null;
 let selectedFile = null;
+
+function toggleSideMenu() {
+  var menu = document.getElementById('side-menu');
+  var overlay = document.getElementById('side-overlay');
+  var btn = document.getElementById('hamburger-btn');
+  var isOpen = menu.classList.contains('open');
+  if (isOpen) { closeSideMenu(); }
+  else {
+    menu.classList.add('open');
+    overlay.style.display = 'block';
+    setTimeout(function(){ overlay.style.opacity = '1'; }, 10);
+    btn.classList.add('open');
+    // 更新菜单里的用户名
+    try {
+      var user = JSON.parse(localStorage.getItem('user') || 'null');
+      var nameEl = document.getElementById('side-user-name');
+      var loginBtn = document.getElementById('menu-login-btn');
+      var registerBtn = document.getElementById('menu-register-btn');
+      var logoutBtn = document.getElementById('menu-logout-btn');
+      if (user && user.role !== 'guest') {
+        nameEl.textContent = '👋 ' + user.username;
+        loginBtn.style.display = 'none';
+        registerBtn.style.display = 'none';
+        logoutBtn.style.display = 'flex';
+      } else {
+        nameEl.textContent = user ? '游客模式' : '未登录';
+        loginBtn.style.display = 'flex';
+        registerBtn.style.display = 'flex';
+        logoutBtn.style.display = 'none';
+      }
+    } catch(e) {}
+  }
+}
+
+function closeSideMenu() {
+  var menu = document.getElementById('side-menu');
+  var overlay = document.getElementById('side-overlay');
+  var btn = document.getElementById('hamburger-btn');
+  menu.classList.remove('open');
+  overlay.style.opacity = '0';
+  btn.classList.remove('open');
+  setTimeout(function(){ overlay.style.display = 'none'; }, 250);
+}
 
 // 文件拖拽
 const uploadArea = document.getElementById('upload-area');
@@ -354,16 +490,8 @@ function showResult(data) {
   // 知识点：优先用返回的 knowledges，其次用题库的
   var knowledges = data.knowledges || (data.matched_question && data.matched_question.ques_knowledges) || [];
   var knSec = document.getElementById('knowledge-section');
-  if (knowledges.length > 0) {
-    var knHtml = '';
-    for (var i = 0; i < knowledges.length; i++) {
-      knHtml += '<span class="knowledge-tag">' + knowledges[i] + '</span>';
-    }
-    document.getElementById('knowledge-tags').innerHTML = knHtml;
-    knSec.style.display = 'block';
-  } else {
-    knSec.style.display = 'none';
-  }
+  // 知识点区块已隐藏
+  knSec.style.display = 'none';
 
   // 程序题可视化
 

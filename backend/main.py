@@ -30,6 +30,9 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from pydantic import BaseModel  # 如果还没有的话
 
+import asyncio
+import uuid
+
 app = FastAPI()
 
 # 添加这个配置
@@ -111,6 +114,74 @@ class MarkWrongRequest(BaseModel):
     username: str = DEFAULT_USER
 
 
+# 任务存储（简单内存dict，重启后丢失）
+_tasks = {}
+
+@app.post("/api/search/image/async")
+async def search_image_async(
+    file: UploadFile = File(...),
+    username: str = Form(default=DEFAULT_USER),
+    need_visualization: bool = Form(default=False),
+):
+    """异步图片搜题：立即返回 task_id，前端轮询 /api/task/{task_id}"""
+    # 保存图片
+    ext = os.path.splitext(file.filename)[-1] or '.jpg'
+    fname = f"{uuid.uuid4().hex}{ext}"
+    save_path = os.path.join(UPLOAD_DIR, fname)
+    content = await file.read()
+    with open(save_path, 'wb') as f:
+        f.write(content)
+
+    task_id = uuid.uuid4().hex
+    _tasks[task_id] = {"status": "pending", "result": None, "error": None}
+
+    # 后台执行（用线程池避免阻塞事件循环）
+    import concurrent.futures
+    _executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+
+    def run_task_sync():
+        """同步版本，在线程池里运行"""
+        import asyncio as _asyncio
+        loop = _asyncio.new_event_loop()
+        _asyncio.set_event_loop(loop)
+        try:
+            vl_result = extract_question_from_image(save_path)
+            question_text = vl_result.get("question_text", "")
+            has_figure = vl_result.get("has_figure", False)
+            vl_answer = vl_result.get("vl_answer")
+            result = loop.run_until_complete(_solve_and_save(
+                question_text=question_text,
+                username=username,
+                image_path=fname,
+                need_visualization=need_visualization,
+                vl_answer=vl_answer,
+                has_figure=has_figure,
+            ))
+            _tasks[task_id]["status"] = "done"
+            _tasks[task_id]["result"] = result
+        except Exception as e:
+            _tasks[task_id]["status"] = "error"
+            _tasks[task_id]["error"] = str(e)
+            logger.error(f"异步任务失败: {e}")
+        finally:
+            loop.close()
+
+    loop = asyncio.get_event_loop()
+    loop.run_in_executor(_executor, run_task_sync)
+    return {"task_id": task_id, "status": "pending"}
+
+
+@app.get("/api/task/{task_id}")
+async def get_task_result(task_id: str):
+    """轮询任务结果"""
+    task = _tasks.get(task_id)
+    if not task:
+        raise HTTPException(404, "任务不存在")
+    if task["status"] == "error":
+        raise HTTPException(500, task["error"])
+    return task
+
+
 # @app.post("/api/search/image")
 # async def search_by_image(
 #     file: UploadFile = File(...),
@@ -119,8 +190,8 @@ class MarkWrongRequest(BaseModel):
 # ):
 #     """
 #     接口1：上传题目图片 → 多模态识别 → 检索 + LLM 解答
+#     若图片含图表则多模态直接解题，否则交给 LLM
 #     """
-#     # 保存上传图片
 #     ext = Path(file.filename).suffix or ".jpg"
 #     filename = f"{uuid.uuid4().hex}{ext}"
 #     save_path = str(Path(UPLOAD_DIR) / filename)
@@ -129,12 +200,18 @@ class MarkWrongRequest(BaseModel):
 #         f.write(await file.read())
 #
 #     try:
-#         # Step 1: 多模态图片识别
+#         # Step 1: 多模态识别（一次调用，同时判断是否含图表）
 #         logger.info(f"识别图片: {filename}")
-#         question_text = extract_question_from_image(save_path)
+#         vl_result = extract_question_from_image(save_path)
 #
+#         question_text = vl_result["question_text"]
 #         if not question_text.strip():
 #             raise HTTPException(status_code=400, detail="图片中未识别到题目文字")
+#
+#         if vl_result.get("has_figure"):
+#             logger.info("图片含图表，多模态直接解题")
+#         else:
+#             logger.info("纯文字题目，交由 LLM 解题")
 #
 #         # Step 2-4: 检索 + 解答 + 保存
 #         return await _solve_and_save(
@@ -142,56 +219,15 @@ class MarkWrongRequest(BaseModel):
 #             username=username,
 #             image_path=save_path,
 #             need_visualization=need_visualization,
+#             vl_answer=vl_result.get("vl_answer"),
+#             has_figure=vl_result.get("has_figure", False),
 #         )
 #
 #     except Exception as e:
 #         logger.exception("图片搜题失败")
 #         raise HTTPException(status_code=500, detail=str(e))
+#
 
-@app.post("/api/search/image")
-async def search_by_image(
-    file: UploadFile = File(...),
-    username: str = Form(DEFAULT_USER),
-    need_visualization: bool = Form(False),
-):
-    """
-    接口1：上传题目图片 → 多模态识别 → 检索 + LLM 解答
-    若图片含图表则多模态直接解题，否则交给 LLM
-    """
-    ext = Path(file.filename).suffix or ".jpg"
-    filename = f"{uuid.uuid4().hex}{ext}"
-    save_path = str(Path(UPLOAD_DIR) / filename)
-
-    with open(save_path, "wb") as f:
-        f.write(await file.read())
-
-    try:
-        # Step 1: 多模态识别（一次调用，同时判断是否含图表）
-        logger.info(f"识别图片: {filename}")
-        vl_result = extract_question_from_image(save_path)
-
-        question_text = vl_result["question_text"]
-        if not question_text.strip():
-            raise HTTPException(status_code=400, detail="图片中未识别到题目文字")
-
-        if vl_result.get("has_figure"):
-            logger.info("图片含图表，多模态直接解题")
-        else:
-            logger.info("纯文字题目，交由 LLM 解题")
-
-        # Step 2-4: 检索 + 解答 + 保存
-        return await _solve_and_save(
-            question_text=question_text,
-            username=username,
-            image_path=save_path,
-            need_visualization=need_visualization,
-            vl_answer=vl_result.get("vl_answer"),
-            has_figure=vl_result.get("has_figure", False),
-        )
-
-    except Exception as e:
-        logger.exception("图片搜题失败")
-        raise HTTPException(status_code=500, detail=str(e))
 
 
 @app.post("/api/search/text")
@@ -226,8 +262,11 @@ async def _solve_and_save(
     retrieved = retrieve(question_text)
 
     # 最佳匹配题目
+    # best_match = retrieved[0] if retrieved else None
+    # similarity = best_match["similarity"] if best_match else 0.0
     best_match = retrieved[0] if retrieved else None
     similarity = best_match["similarity"] if best_match else 0.0
+    matched = best_match if similarity >= 0.75 else None
 
     # Step 3: LLM 解答（RAG）
     if has_figure and vl_answer:
@@ -259,7 +298,7 @@ async def _solve_and_save(
             viz_html = None
 
     # 安全合并知识点，确保最终是 list
-    bank_kns = (best_match.get("ques_knowledges") or []) if best_match else []
+    bank_kns = (best_match.get("ques_knowledges") or []) if matched else []
     llm_kns = llm_result.get("knowledges") or []
     if not isinstance(bank_kns, list): bank_kns = []
     if not isinstance(llm_kns, list): llm_kns = []
@@ -274,41 +313,23 @@ async def _solve_and_save(
         similarity_score=similarity,
         image_path=image_path,
         visualization_html=viz_html,
-        subject=best_match.get("subject", "") if best_match else llm_result.get("subject", ""),
-        ques_type=best_match.get("ques_type", "") if best_match else llm_result.get("ques_type", ""),
-        ques_difficulty=best_match.get("ques_difficulty", "") if best_match else llm_result.get("ques_difficulty", ""),
+        subject=matched.get("subject", "") if matched else llm_result.get("subject", ""),
+        ques_type=matched.get("ques_type", "") if matched else llm_result.get("ques_type", ""),
+        ques_difficulty=matched.get("ques_difficulty", "") if matched else llm_result.get("ques_difficulty", ""),
+        # subject=best_match.get("subject", "") if best_match and similarity >= 0.75 else llm_result.get("subject", ""),
+        # ques_type=best_match.get("ques_type", "") if best_match and similarity >= 0.75 else llm_result.get("ques_type", ""),
+        # ques_difficulty=best_match.get("ques_difficulty", "") if best_match and similarity >= 0.75 else llm_result.get("ques_difficulty", ""),
         knowledges=merged_knowledges,  # ← 用安全合并后的结果
     )
-    # viz_html = None
-    # is_program_question = _is_program_question(question_text, best_match)
-    # if need_visualization and is_program_question:
-    #     logger.info("生成程序题可视化 HTML")
-    #     viz_html = generate_visualization_html(question_text, llm_answer)
-    #
-    # record = save_solve_record(
-    #     user_id=user.id,
-    #     question_text=question_text,
-    #     llm_answer=llm_answer,
-    #     llm_thinking=llm_thinking,
-    #     matched_question=best_match,
-    #     similarity_score=similarity,
-    #     image_path=image_path,
-    #     visualization_html=viz_html,
-    #     subject=best_match.get("subject", "") if best_match else llm_result.get("subject", ""),
-    #     ques_type=best_match.get("ques_type", "") if best_match else llm_result.get("ques_type", ""),
-    #     ques_difficulty=best_match.get("ques_difficulty", "") if best_match else llm_result.get("ques_difficulty", ""),
-    #     knowledges=list(set(
-    #         (best_match.get("ques_knowledges") or []) +
-    #         (llm_result.get("knowledges") or [])
-    #     )) if best_match else (llm_result.get("knowledges") or []),
-    # )
 
     return {
         "record_id": record.id,
         "question_text": question_text,
-        "matched_from_bank": best_match is not None and similarity > 0.7,
+        "matched_from_bank": matched is not None,  # 用 matched 而不是 best_match
+        "matched_question": matched,
+        # "matched_from_bank": best_match is not None and similarity > 0.7,
         "similarity": round(similarity, 4),
-        "matched_question": best_match,
+        # "matched_question": best_match,
         "llm_answer": llm_answer,
         "llm_thinking": llm_thinking,
         "knowledges": record.knowledges or [],
@@ -650,6 +671,75 @@ async def login_page(request: Request):
 async def register_page(request: Request):
     return templates.TemplateResponse("register.html", {"request": request})
 
+# ==================== 微信登录 ====================
+import httpx as _httpx
+
+@app.post("/api/auth/wechat-login")
+async def wechat_login(code: str):
+    from config import WECHAT_APPID, WECHAT_SECRET
+    from core.database import get_or_create_user_by_openid
+    from core.auth import create_access_token
+
+    async with _httpx.AsyncClient() as client:
+        resp = await client.get(
+            "https://api.weixin.qq.com/sns/jscode2session",
+            params={
+                "appid": WECHAT_APPID,
+                "secret": WECHAT_SECRET,
+                "js_code": code,
+                "grant_type": "authorization_code",
+            },
+            timeout=10,
+        )
+    data = resp.json()
+    openid = data.get("openid")
+    if not openid:
+        raise HTTPException(status_code=400, detail=f"微信登录失败：{data.get('errmsg','未知错误')}")
+
+    user, is_new = get_or_create_user_by_openid(openid)
+
+    # 直接用返回的基础数据，不再访问 ORM 对象属性
+    token = create_access_token(user.id, user.username, role="student")
+    return {
+        "token": token,
+        "user": {"id": user.id, "username": user.username, "role": "student"},
+        "is_new": is_new,
+    }
+# @app.post("/api/auth/wechat-login")
+# async def wechat_login(code: str):
+#     """微信小程序登录：用 code 换取 openid，返回 JWT"""
+#     from config import WECHAT_APPID, WECHAT_SECRET
+#     from core.database import get_or_create_user_by_openid
+#     from core.auth import create_access_token
+#
+#     # 1. 用 code 换 openid
+#     async with _httpx.AsyncClient() as client:
+#         resp = await client.get(
+#             "https://api.weixin.qq.com/sns/jscode2session",
+#             params={
+#                 "appid": WECHAT_APPID,
+#                 "secret": WECHAT_SECRET,
+#                 "js_code": code,
+#                 "grant_type": "authorization_code",
+#             },
+#             timeout=10,
+#         )
+#     data = resp.json()
+#     openid = data.get("openid")
+#     if not openid:
+#         raise HTTPException(status_code=400, detail=f"微信登录失败：{data.get('errmsg','未知错误')}")
+#
+#     # 2. 查找或创建用户
+#     user, is_new = get_or_create_user_by_openid(openid)
+#
+#     # 3. 签发 JWT
+#     token = create_access_token(user.id, user.username, role="student")
+#     return {
+#         "token": token,
+#         "user": {"id": user.id, "username": user.username, "role": "student"},
+#         "is_new": is_new,
+#     }
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}
@@ -719,3 +809,47 @@ async def practice_by_knowledge(
         "total": len(questions),
         "ai_generated": ai_generated,
     }
+
+
+from fastapi.responses import StreamingResponse
+import json as _json
+
+@app.get("/api/practice-by-knowledge-stream")
+async def practice_by_knowledge_stream(
+    knowledge: str,
+    username: str = DEFAULT_USER,
+    n: int = 3,
+):
+    """按知识点流式生成练习题，每生成一题推送一次"""
+    from core.analysis import recommend_practice_questions
+    from core.llm import generate_one_practice_question
+
+    async def generate():
+        # 先尝试题库
+        cluster = {
+            "label": knowledge,
+            "knowledge_points": [knowledge],
+            "knowledge_freq": {knowledge: 1},
+            "wrong_count": 0, "severity": "中",
+            "records": [], "subjects": [],
+        }
+        bank_questions = recommend_practice_questions(cluster, n_questions=n)
+
+        if bank_questions:
+            for q in bank_questions:
+                data = _json.dumps(q, ensure_ascii=False)
+                yield f"data: {data}\n\n"
+        else:
+            # 题库无匹配，逐题调用 LLM 生成
+            for i in range(n):
+                q = generate_one_practice_question(knowledge)
+                if q:
+                    data = _json.dumps(q, ensure_ascii=False)
+                    yield f"data: {data}\n\n"
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        generate(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )

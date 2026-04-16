@@ -96,6 +96,7 @@ class UserAuth(Base):
     last_login      = Column(DateTime)
     created_at      = Column(DateTime, default=datetime.utcnow)
     updated_at      = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    openid          = Column(String(128), unique=True, index=True)
 
 
 # ==================== 上传图片表 ====================
@@ -473,3 +474,92 @@ def unmark_wrong(record_id: int, user_id: int):
                     if stat.wrong_count == 0:
                         db.delete(stat)
             db.commit()
+
+def get_or_create_user_by_openid(openid: str) -> tuple:
+    with SessionLocal() as db:
+        auth = db.query(UserAuth).filter_by(openid=openid).first()
+        if auth:
+            user = db.query(User).filter_by(id=auth.user_id).first()
+            # 在 session 关闭前把属性读出来
+            user_id = user.id
+            username = user.username
+            # 构造一个简单对象返回，避免 DetachedInstanceError
+            class UserInfo:
+                pass
+            u = UserInfo()
+            u.id = user_id
+            u.username = username
+            return u, False
+
+        username = f"wx_{openid[-8:]}"
+        i = 0
+        base = username
+        while db.query(User).filter_by(username=username).first():
+            i += 1
+            username = f"{base}_{i}"
+
+        user = User(username=username)
+        db.add(user)
+        db.commit()
+        db.refresh(user)
+        user_id = user.id
+        username = user.username
+
+        auth = UserAuth(
+            user_id=user_id,
+            username=username,
+            openid=openid,
+            role="student",
+            is_active=True,
+        )
+        db.add(auth)
+        db.commit()
+
+        class UserInfo:
+            pass
+        u = UserInfo()
+        u.id = user_id
+        u.username = username
+        return u, True
+
+# def get_or_create_user_by_openid(openid: str) -> tuple:
+#     """通过微信 openid 查找或创建用户，返回 (user, is_new)"""
+#     with SessionLocal() as db:
+#         auth = db.query(UserAuth).filter_by(openid=openid).first()
+#         if auth:
+#             user = db.query(User).get(auth.user_id)
+#             return user, False
+#
+#         # 新用户：用 openid 后8位生成用户名
+#         username = f"wx_{openid[-8:]}"
+#         # 避免重名
+#         i = 0
+#         base = username
+#         while db.query(User).filter_by(username=username).first():
+#             i += 1
+#             username = f"{base}_{i}"
+#
+#         user = User(username=username)
+#         db.add(user)
+#         db.commit()
+#         db.refresh(user)
+#
+#         auth = UserAuth(
+#             user_id=user.id,
+#             username=username,
+#             openid=openid,
+#             role="student",
+#             is_active=True,
+#         )
+#         db.add(auth)
+#         db.commit()
+#         return user, True
+
+
+def get_user_by_openid(openid: str):
+    """通过 openid 查找用户"""
+    with SessionLocal() as db:
+        auth = db.query(UserAuth).filter_by(openid=openid).first()
+        if not auth:
+            return None
+        return db.query(User).get(auth.user_id)

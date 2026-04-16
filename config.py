@@ -37,3 +37,7 @@ INTERNVL_MAX_NEW_TOKENS = 256
 import torch
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 TORCH_DTYPE = torch.float16 if DEVICE == "cuda" else torch.float32
+
+# ============ 微信小程序配置 ============
+WECHAT_APPID  = os.getenv("WECHAT_APPID", "wxb08fc3686d5d851c")
+WECHAT_SECRET = os.getenv("WECHAT_SECRET", "70e6eaf78dee592db322c9435c38aa62")

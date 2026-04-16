@@ -126,12 +126,21 @@ def answer_question(question_text: str, retrieved: list) -> dict:
     writing_hint = "请写完整文章，不少于600字。" if is_writing else ""
 
     context = ""
-    if retrieved:
+    high_quality = [r for r in retrieved if r.get("similarity", 0) >= 0.5]
+    if high_quality:
         context = "\n参考题目：\n"
-        for i, r in enumerate(retrieved[:3]):
-            context += f"{i+1}. {r.get('ques_content', '')}\n"
+        for i, r in enumerate(high_quality[:3]):
+            context += f"{i + 1}. {r.get('ques_content', '')}\n"
             if r.get('ques_answer'):
                 context += f"   答案：{r['ques_answer']}\n"
+    # context = ""
+    # high_quality = [r for r in retrieved if r.get("similarity", 0) >= 0.5]
+    # if high_quality:
+    #     context = "\n参考题目：\n"
+    #     for i, r in enumerate(high_quality[:3]):
+    #         context += f"{i + 1}. {r.get('ques_content', '')}\n"
+    #         if r.get('ques_answer'):
+    #             context += f"   答案：{r['ques_answer']}\n"
 
     # 第一步：解答题目
     resp1 = _llm.create_chat_completion(
@@ -298,122 +307,286 @@ def answer_question(question_text: str, retrieved: list) -> dict:
 #         "knowledges": knowledges,
 #     }
 
+def generate_one_practice_question(knowledge: str) -> dict:
+    """使用 InternVL 生成单道练习题（生成质量更好）"""
+    from core.multimodal import _load_model, _tokenizer, _model
+    import torch, re as _re
+
+    _load_model()
+
+    prompt = f"""你是一位专业出题教师，请针对知识点「{knowledge}」出一道高质量练习题。
+
+严格按以下格式输出，不要有其他内容：
+题目：（写出完整题目，可以是选择题、填空题或简答题）
+答案：（写出正确答案）
+解析：（写出详细解题思路，100字以内）
+难度：（简单/一般/较难 三选一）"""
+
+    with torch.no_grad():
+        response = _model.chat(
+            _tokenizer,
+            pixel_values=None,
+            question=prompt,
+            generation_config=dict(
+                max_new_tokens=300,
+                do_sample=True,
+                temperature=0.7,
+            )
+        )
+
+    raw = response.strip()
+    raw = _re.sub(r'<think>.*?</think>', '', raw, flags=_re.DOTALL).strip()
+
+    lines = [l.strip() for l in raw.splitlines() if l.strip()]
+    answer, analyze, difficulty, content_lines = '', '', '一般', []
+
+    for line in lines:
+        if _re.match(r'^(答案|正确答案)[：:]', line):
+            answer = _re.sub(r'^(答案|正确答案)[：:]\s*', '', line).strip()
+        elif _re.match(r'^(解析|分析)[：:]', line):
+            analyze = _re.sub(r'^(解析|分析)[：:]\s*', '', line).strip()
+        elif _re.match(r'^难度[：:]', line):
+            difficulty = _re.sub(r'^难度[：:]\s*', '', line).strip()
+        elif _re.match(r'^题目[：:]', line):
+            content_lines.append(_re.sub(r'^题目[：:]\s*', '', line).strip())
+        else:
+            content_lines.append(line)
+
+    ques_content = '\n'.join(content_lines).strip() or raw
+    if not answer and lines:
+        answer = lines[-1]
+        ques_content = '\n'.join(lines[:-1]).strip() or raw
+
+    if not ques_content:
+        return None
+    return {
+        'ques_content': ques_content,
+        'ques_answer': answer or '见解析',
+        'ques_analyze': analyze,
+        'ques_difficulty': difficulty,
+        'ques_knowledges': [knowledge],
+        'subject': '',
+        'ques_type': 'AI生成',
+        '_ai_generated': True,
+    }
+
+# def generate_one_practice_question(knowledge: str) -> dict:
+#     """生成单道练习题"""
+#     _load_llm()
+#     import re as _re
+#
+#     resp = _llm.create_chat_completion(
+#         messages=[
+#             {"role": "system", "content": "/no_think 你是专业教师，请出一道关于指定知识点的练习题并给出答案和解析。"},
+#             {"role": "user", "content": f"请出一道关于「{knowledge}」的练习题，包括题目、答案和简短解析。"}
+#         ],
+#         max_tokens=300,
+#         temperature=0.8,
+#     )
+#     raw = resp["choices"][0]["message"]["content"].strip()
+#     raw = _re.sub(r'<think>.*?</think>', '', raw, flags=_re.DOTALL).strip()
+#     if not raw:
+#         return None
+#
+#     lines = [l.strip() for l in raw.splitlines() if l.strip()]
+#     answer, analyze, content_lines = '', '', []
+#     for line in lines:
+#         if _re.match(r'^(答案|正确答案|答)[：:]', line):
+#             answer = _re.sub(r'^(答案|正确答案|答)[：:]\s*', '', line).strip()
+#         elif _re.match(r'^(解析|分析|解题)[：:]', line):
+#             analyze = _re.sub(r'^(解析|分析|解题)[：:]\s*', '', line).strip()
+#         elif _re.match(r'^题目[：:]', line):
+#             content_lines.append(_re.sub(r'^题目[：:]\s*', '', line).strip())
+#         else:
+#             content_lines.append(line)
+#
+#     ques_content = '\n'.join(content_lines).strip() or raw
+#     if not answer and lines:
+#         answer = lines[-1]
+#         ques_content = '\n'.join(lines[:-1]).strip() or raw
+#
+#     return {
+#         'ques_content': ques_content,
+#         'ques_answer': answer or '见解析',
+#         'ques_analyze': analyze,
+#         'ques_difficulty': '一般',
+#         'ques_knowledges': [knowledge],
+#         'subject': '', 'ques_type': 'AI生成', '_ai_generated': True,
+#     }
 
 def generate_practice_questions(knowledge: str, n: int = 3) -> list:
-    """
-    根据知识点，让 LLM 生成 n 道练习题
-    返回格式与题库一致的列表
-    """
+    """根据知识点让 LLM 生成练习题，不依赖固定格式"""
     _load_llm()
-
-    resp = _llm.create_chat_completion(
-        messages=[
-            {"role": "system", "content": "/no_think 你是专业出题教师，根据知识点出题，格式严格按要求输出，不要多余内容。"},
-            {"role": "user", "content": f"""请针对知识点「{knowledge}」出{n}道练习题。
-
-每道题严格按如下格式输出，题目之间用"---"分隔：
-题目：<题目内容>
-答案：<答案>
-解析：<解析>
-难度：<简单/一般/较难>
-
----"""}
-        ],
-        max_tokens=1200,
-        temperature=0.7,
-    )
-
-    raw = resp["choices"][0]["message"]["content"].strip()
-
-    import re
-    raw = re.sub(r'<think>.*?</think>', '', raw, flags=re.DOTALL).strip()
-
-    # 解析每道题
+    import re as _re
     questions = []
-    blocks = re.split(r'\n---+\n?', raw)
-    for block in blocks:
-        block = block.strip()
-        if not block:
+
+    for i in range(n):
+        resp = _llm.create_chat_completion(
+            messages=[
+                {"role": "system", "content": "/no_think 你是专业教师，请出一道关于指定知识点的练习题并给出答案和解析。"},
+                {"role": "user", "content": f"请出一道关于「{knowledge}」的练习题，包括题目、答案和简短解析。"}
+            ],
+            max_tokens=300,
+            temperature=0.8,
+        )
+        raw = resp["choices"][0]["message"]["content"].strip()
+        raw = _re.sub(r'<think>.*?</think>', '', raw, flags=_re.DOTALL).strip()
+
+        if not raw:
             continue
-        q = {}
-        for field, key in [('题目：', 'ques_content'), ('答案：', 'ques_answer'),
-                           ('解析：', 'ques_analyze'), ('难度：', 'ques_difficulty')]:
-            m = re.search(field + r'(.+?)(?=\n(?:题目|答案|解析|难度)：|$)', block, re.DOTALL)
-            if m:
-                q[key] = m.group(1).strip()
-        if q.get('ques_content'):
-            q['ques_knowledges'] = [knowledge]
-            q['subject'] = ''
-            q['ques_type'] = 'AI生成'
-            q['_ai_generated'] = True
-            questions.append(q)
 
-    return questions[:n]
+        # 把整个输出当题目内容，答案和解析从文本中提取
+        lines = [l.strip() for l in raw.splitlines() if l.strip()]
+
+        # 尝试提取答案行
+        answer = ''
+        analyze = ''
+        content_lines = []
+        for line in lines:
+            if _re.match(r'^(答案|正确答案|答)[：:：]', line):
+                answer = _re.sub(r'^(答案|正确答案|答)[：:：]\s*', '', line).strip()
+            elif _re.match(r'^(解析|分析|解题)[：:：]', line):
+                analyze = _re.sub(r'^(解析|分析|解题)[：:：]\s*', '', line).strip()
+            elif _re.match(r'^(题目)[：:：]', line):
+                content_lines.append(_re.sub(r'^题目[：:：]\s*', '', line).strip())
+            else:
+                content_lines.append(line)
+
+        ques_content = '\n'.join(content_lines).strip()
+        if not ques_content:
+            ques_content = raw
+
+        # 如果没提取到答案，把最后一行当答案
+        if not answer and lines:
+            answer = lines[-1]
+            ques_content = '\n'.join(lines[:-1]).strip() or raw
+
+        questions.append({
+            'ques_content': ques_content,
+            'ques_answer': answer or '见解析',
+            'ques_analyze': analyze,
+            'ques_difficulty': '一般',
+            'ques_knowledges': [knowledge],
+            'subject': '',
+            'ques_type': 'AI生成',
+            '_ai_generated': True,
+        })
+
+    return questions
+
+# def generate_practice_questions(knowledge: str, n: int = 3) -> list:
+#     """根据知识点让 LLM 生成练习题"""
+#     _load_llm()
+#
+#     questions = []
+#     import re
+#
+#     for i in range(n):
+#         resp = _llm.create_chat_completion(
+#             messages=[
+#                 {"role": "system", "content": "/no_think 你是专业出题教师，每次只出一道题，严格按指定格式回答。"},
+#                 {"role": "user", "content": f"针对知识点「{knowledge}」出一道练习题。\n\n必须严格按以下格式回答，每项单独一行：\n题目：写题目内容\n答案：写答案\n解析：写解析\n难度：简单"}
+#             ],
+#             max_tokens=400,
+#             temperature=0.7,
+#         )
+#         raw = resp["choices"][0]["message"]["content"].strip()
+#         import re as _re
+#         raw = _re.sub(r'<think>.*?</think>', '', raw, flags=_re.DOTALL).strip()
+#
+#         q = {}
+#         for field, key in [('题目：', 'ques_content'), ('答案：', 'ques_answer'),
+#                             ('解析：', 'ques_analyze'), ('难度：', 'ques_difficulty')]:
+#             # 宽松匹配：字段名后面直到下一个字段名或结尾
+#             m = re.search(field + r'([\s\S]+?)(?=\n(?:题目|答案|解析|难度)：|$)', raw)
+#             if m:
+#                 q[key] = m.group(1).strip()
+#
+#         # 兜底：如果没解析出题目，把整个输出当题目
+#         if not q.get('ques_content') and raw:
+#             lines = [l.strip() for l in raw.splitlines() if l.strip()]
+#             if lines:
+#                 q['ques_content'] = lines[0]
+#                 q['ques_answer'] = lines[1] if len(lines) > 1 else '见解析'
+#                 q['ques_analyze'] = '\n'.join(lines[2:]) if len(lines) > 2 else ''
+#                 q['ques_difficulty'] = '一般'
+#
+#         if q.get('ques_content'):
+#             q['ques_knowledges'] = [knowledge]
+#             q['subject'] = ''
+#             q['ques_type'] = 'AI生成'
+#             q['_ai_generated'] = True
+#             questions.append(q)
+#
+#     return questions
 
 
-def generate_wrong_answer_report(
-    wrong_questions: List[Dict[str, Any]],
-    user_id: int
-) -> str:
-    """
-    根据用户的错题记录生成个性化错题分析报告
 
-    Args:
-        wrong_questions: 用户错题列表
-        user_id: 用户ID
-
-    Returns:
-        错题分析报告文本
-    """
-    _load_llm()
+def generate_wrong_answer_report(wrong_questions, user_id):
+    """使用 InternVL 生成个性化错题分析报告（文本生成能力更强）"""
+    from core.multimodal import _load_model, _tokenizer, _model
+    import torch
 
     if not wrong_questions:
         return "暂无错题记录。"
 
     # 汇总错题信息
-    wrong_summary = []
-    knowledge_counter: Dict[str, int] = {}
+    knowledge_counter = {}
+    wrong_details = []
+    import json as _json
 
-    for q in wrong_questions:
-        content = q.get("ques_content", "")
-        knowledges = q.get("ques_knowledges", [])
-        subject = q.get("subject", "")
-        wrong_summary.append(f"- {subject}：{content[:60]}...")
+    for q in wrong_questions[:10]:
+        content = q.get("question_text", "")[:80]
+        knowledges = q.get("knowledges") or []
+        if isinstance(knowledges, str):
+            try: knowledges = _json.loads(knowledges)
+            except: knowledges = []
+        subject = q.get("subject", "未知学科")
         for k in knowledges:
-            knowledge_counter[k] = knowledge_counter.get(k, 0) + 1
+            if k:
+                knowledge_counter[k] = knowledge_counter.get(k, 0) + 1
+        wrong_details.append(f"【{subject}】{content}")
 
-    # 按频率排序薄弱知识点
     weak_points = sorted(knowledge_counter.items(), key=lambda x: x[1], reverse=True)
-    weak_str = "、".join([f"{k}（{v}次）" for k, v in weak_points[:5]])
+    weak_str = "\n".join([f"- {k}：错误{v}次" for k, v in weak_points[:8]])
+    wrong_str = "\n".join(wrong_details)
 
-    wrong_str = "\n".join(wrong_summary[:10])
+    prompt = f"""你是一位经验丰富的学习分析师。以下是一名学生的错题记录，请生成一份专业的个性化错题分析报告。
 
-    prompt = f"""请根据以下错题记录，生成一份个性化的错题分析报告。
-
-错题列表：
+错题列表（共{len(wrong_questions)}道）：
 {wrong_str}
 
-频繁出错的知识点：{weak_str}
+主要薄弱知识点：
+{weak_str if weak_str else "暂无具体知识点标注"}
 
-请输出：
-1. 错题整体分析（100字以内）
-2. 主要薄弱知识点及建议
-3. 针对性学习建议（3条）
-"""
+请按以下结构输出报告：
 
-    messages = [
-        {"role": "system", "content": "你是专业的学习分析师，用中文输出清晰简洁的学习报告。"},
-        {"role": "user", "content": prompt}
-    ]
+【整体诊断】
+（100字以内，分析该学生的整体学习状况和主要问题）
 
-    response = _llm.create_chat_completion(
-        messages=messages,
-        max_tokens=512,
-        temperature=0.5,
-    )
+【薄弱知识点分析】
+（针对上述每个具体知识点，说明为什么容易出错）
 
-    # return response["choices"][0]["message"]["content"].strip()
-    return _strip_thinking(response["choices"][0]["message"]["content"])
+【个性化学习建议】
+（给出3-5条具体可操作的学习建议，每条建议必须针对特定知识点）"""
+
+    _load_model()
+
+    with torch.no_grad():
+        response = _model.chat(
+            _tokenizer,
+            pixel_values=None,
+            question=prompt,
+            generation_config=dict(
+                max_new_tokens=600,
+                do_sample=True,
+                temperature=0.7,
+            )
+        )
+
+    return response.strip()
+
+
 
 def generate_visualization_html(question_text: str, answer_text: str) -> str:
     """

@@ -497,28 +497,89 @@ async function loadClusters(){
   finally{btn.disabled=false;btn.textContent="重新分析";}
 }
 
+<!--async function practiceByKn(knowledge) {-->
+<!--  switchTab(2);-->
+<!--  const c = document.getElementById('practice-container');-->
+<!--  const btn = document.getElementById('prac-btn');-->
+<!--  c.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>';-->
+<!--  if (btn) { btn.disabled = true; btn.textContent = '⏳ 生成中...'; }-->
+<!--  try {-->
+<!--    const d = await (await fetch(-->
+<!--      '/api/practice-by-knowledge?knowledge=' + encodeURIComponent(knowledge) + '&username=default&n=3'-->
+<!--    )).json();-->
+<!--    if (!d.questions || !d.questions.length) {-->
+<!--      c.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><div>暂无「' + knowledge + '」相关题目</div></div>';-->
+<!--      return;-->
+<!--    }-->
+<!--    var fakePlan = [{-->
+<!--      cluster_id: 0, label: knowledge, knowledge_points: [knowledge],-->
+<!--      wrong_count: 0, severity: '中', subjects: [], practice_questions: d.questions,-->
+<!--    }];-->
+<!--    var tip = d.ai_generated-->
+<!--      ? '<div style="font-size:0.82rem;color:#7c3aed;margin-bottom:12px;padding:8px 12px;background:#f3e8ff;border-radius:8px;">✨ 以下为 AI 针对「' + knowledge + '」生成的练习题</div>'-->
+<!--      : '<div style="font-size:0.82rem;color:#6b7280;margin-bottom:12px;">📌 以下为「' + knowledge + '」的专项练习题</div>';-->
+<!--    c.innerHTML = tip + fakePlan.map(function(p, pi) { return buildPracticeSection(p, pi); }).join('');-->
+<!--  } catch(e) {-->
+<!--    c.innerHTML = '<div style="color:#dc2626;font-size:0.85rem">生成失败：' + e.message + '</div>';-->
+<!--  } finally {-->
+<!--    if (btn) { btn.disabled = false; btn.textContent = '重新生成'; }-->
+<!--  }-->
+<!--}-->
+
 async function practiceByKn(knowledge) {
   switchTab(2);
   const c = document.getElementById('practice-container');
   const btn = document.getElementById('prac-btn');
   c.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>';
   if (btn) { btn.disabled = true; btn.textContent = '⏳ 生成中...'; }
+
+  var tip = '<div style="font-size:0.82rem;color:#7c3aed;margin-bottom:12px;padding:8px 12px;background:#f3e8ff;border-radius:8px;">✨ 正在为「' + knowledge + '」生成专项练习题...</div>';
+  var questionsHtml = '';
+  var qCount = 0;
+  c.innerHTML = tip + '<div id="stream-questions"></div>';
+
   try {
-    const d = await (await fetch(
-      '/api/practice-by-knowledge?knowledge=' + encodeURIComponent(knowledge) + '&username=default&n=3'
-    )).json();
-    if (!d.questions || !d.questions.length) {
-      c.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><div>暂无「' + knowledge + '」相关题目</div></div>';
-      return;
+    const resp = await fetch(
+      '/api/practice-by-knowledge-stream?knowledge=' + encodeURIComponent(knowledge) + '&username=default&n=3'
+    );
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6).trim();
+        if (data === '[DONE]') break;
+        try {
+          const q = JSON.parse(data);
+          qCount++;
+          // 渲染这道题并追加到容器
+          var fakePlan = [{
+            cluster_id: 0, label: knowledge, knowledge_points: [knowledge],
+            wrong_count: 0, severity: '中', subjects: [], practice_questions: [q],
+          }];
+          var _sq = document.getElementById('stream-questions');
+          _sq.innerHTML += buildPracticeSection(fakePlan[0], qCount - 1).replace(
+              /练习题<\/div>/, '练习题（第' + qCount + '题）</div>'
+            );
+        } catch(e) {}
+      }
     }
-    var fakePlan = [{
-      cluster_id: 0, label: knowledge, knowledge_points: [knowledge],
-      wrong_count: 0, severity: '中', subjects: [], practice_questions: d.questions,
-    }];
-    var tip = d.ai_generated
-      ? '<div style="font-size:0.82rem;color:#7c3aed;margin-bottom:12px;padding:8px 12px;background:#f3e8ff;border-radius:8px;">✨ 以下为 AI 针对「' + knowledge + '」生成的练习题</div>'
-      : '<div style="font-size:0.82rem;color:#6b7280;margin-bottom:12px;">📌 以下为「' + knowledge + '」的专项练习题</div>';
-    c.innerHTML = tip + fakePlan.map(function(p, pi) { return buildPracticeSection(p, pi); }).join('');
+
+    if (qCount === 0) {
+      c.innerHTML = '<div class="empty-state"><div class="empty-icon">📝</div><div>暂无「' + knowledge + '」相关题目</div></div>';
+    } else {
+      // 更新提示文字
+      document.querySelector('#stream-questions').parentNode.querySelector('div:first-child').textContent =
+        '📌 以下为「' + knowledge + '」的专项练习题（共' + qCount + '题）';
+    }
   } catch(e) {
     c.innerHTML = '<div style="color:#dc2626;font-size:0.85rem">生成失败：' + e.message + '</div>';
   } finally {
@@ -584,6 +645,7 @@ async function loadPractice(){
     const d=await(await fetch(`/api/practice-plan?username=default&questions_per_cluster=${n}`)).json();
     if(!d.plan||!d.plan.length){c.innerHTML="<div class=\"empty-state\"><div class=\"empty-icon\">📝</div><div>暂无错题，无法生成练习。</div></div>";return;}
     c.innerHTML=d.plan.map((p,pi)=>buildPracticeSection(p,pi)).join("");
+    if(window.MathJax)MathJax.typesetPromise();
   }catch(e){c.innerHTML="<div style=\"color:#dc2626;font-size:0.85rem\">生成失败</div>";}
   finally{btn.disabled=false;btn.textContent="重新生成";}
 }
@@ -624,17 +686,44 @@ function toggleAns(pi,qi){
 }
 
 // ========== AI 报告 ==========
-async function genReport(){
-  const btn=document.getElementById("rep-btn");
-  const c=document.getElementById("rep-container");
-  btn.disabled=true; btn.textContent="⏳ 生成中...";
-  c.innerHTML="<div class=\"spinner-wrap\"><div class=\"spinner\"></div></div>";
-  try{
-    const d=await(await fetch("/api/wrong-report?username=default")).json();
-    if(d.report) c.innerHTML=`<div style="font-size:0.78rem;color:#9ca3af;margin-bottom:10px">基于 ${d.total_wrong||0} 道错题生成</div><div class="report-box">${esc(d.report)}</div>`;
-  }catch(e){c.innerHTML="<div style=\"color:#dc2626;font-size:0.85rem\">生成失败</div>";}
-  finally{btn.disabled=false;btn.textContent="重新生成";}
+async function genReport() {
+  const btn = document.getElementById('rep-btn');
+  const c = document.getElementById('rep-container');
+  btn.disabled = true; btn.textContent = '⏳ 生成中...';
+  c.innerHTML = '<div class="spinner-wrap"><div class="spinner"></div></div>';
+  try {
+    const d = await (await fetch('/api/wrong-report?username=default')).json();
+    // report 可能是字符串或列表，统一处理
+    var reportText = '';
+    if (Array.isArray(d.report)) {
+      reportText = d.report.filter(function(s){ return s && s.trim(); }).join('\n\n');
+    } else {
+      reportText = d.report || '';
+    }
+    if (reportText) {
+      c.innerHTML = '<div style="font-size:0.78rem;color:#9ca3af;margin-bottom:10px;">基于 ' +
+        (d.total_wrong || 0) + ' 道错题生成</div>' +
+        '<div class="report-box">' + esc(reportText) + '</div>';
+    } else {
+      c.innerHTML = '<div style="color:#9ca3af;">暂无内容</div>';
+    }
+  } catch(e) {
+    c.innerHTML = '<div style="color:#dc2626;font-size:0.85rem">生成失败：' + e.message + '</div>';
+  } finally {
+    btn.disabled = false; btn.textContent = '重新生成';
+  }
 }
+<!--async function genReport(){-->
+<!--  const btn=document.getElementById("rep-btn");-->
+<!--  const c=document.getElementById("rep-container");-->
+<!--  btn.disabled=true; btn.textContent="⏳ 生成中...";-->
+<!--  c.innerHTML="<div class=\"spinner-wrap\"><div class=\"spinner\"></div></div>";-->
+<!--  try{-->
+<!--    const d=await(await fetch("/api/wrong-report?username=default")).json();-->
+<!--    if(d.report) c.innerHTML=`<div style="font-size:0.78rem;color:#9ca3af;margin-bottom:10px">基于 ${d.total_wrong||0} 道错题生成</div><div class="report-box">${esc(d.report)}</div>`;-->
+<!--  }catch(e){c.innerHTML="<div style=\"color:#dc2626;font-size:0.85rem\">生成失败</div>";}-->
+<!--  finally{btn.disabled=false;btn.textContent="重新生成";}-->
+<!--}-->
 
 function esc(s){return(s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");}
 loadWrong();

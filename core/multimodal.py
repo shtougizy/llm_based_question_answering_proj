@@ -67,23 +67,38 @@ def _preprocess_image(image: Image.Image):
 
 
 # 一次调用的 prompt：让模型自己判断并选择输出格式
-_PROMPT_COMBINED = """请分析这张图片：
+_PROMPT_COMBINED = """请分析这张题目图片。图片可能包含手写圆圈、下划线、箭头等标注，请忽略这些标注，只识别印刷体题目内容。
 
-第一步：判断图片中除文字以外，是否还包含与题目解答有关的图表、示意图、坐标轴、几何图形、电路图、化学结构式、实验装置图等视觉内容。
-
-如果【有】与题目相关的图表或示意图，请按如下格式输出：
+如果图片【含有】图表、坐标轴、几何图、表格、化学结构式，请按如下格式输出：
 [有图表]
-题目：<图片中的题目原文>
-解答：<结合图表内容的完整解题过程和答案>
+题目：<题目文字，忽略手写标注>
 
-如果【没有】，图片只包含纯文字题目，请按如下格式输出：
+如果图片【只有】纯文字题目（无图表），请按如下格式输出：
 [纯文字]
-题目：<图片中的题目原文>
+题目：<题目原文，忽略手写标注，不包含解答>
 
 注意：
-- 坐标轴、几何图、函数图像、实验图、地图等都算"有图表"
-- 只有文字、数字、符号的题目算"纯文字"
-- 严格按上述格式输出，不要添加其他内容"""
+- 忽略红色/蓝色圆圈、下划线、箭头等手写标注
+- 题目内容只包含印刷体文字
+- 纯文字模式下不要输出解答
+"""
+# _PROMPT_COMBINED = """请分析这张图片：
+#
+# 第一步：判断图片中除文字以外，是否还包含与题目解答有关的图表、示意图、坐标轴、几何图形、电路图、化学结构式、实验装置图等视觉内容。
+#
+# 如果【有】与题目相关的图表或示意图，请按如下格式输出：
+# [有图表]
+# 题目：<图片中的题目原文>
+# 解答：<结合图表内容的完整解题过程和答案>
+#
+# 如果【没有】，图片只包含纯文字题目，请按如下格式输出：
+# [纯文字]
+# 题目：<图片中的题目原文>
+#
+# 注意：
+# - 坐标轴、几何图、函数图像、实验图、地图等都算"有图表"
+# - 只有文字、数字、符号的题目算"纯文字"
+# - 严格按上述格式输出，不要添加其他内容"""
 
 
 def extract_question_from_image(image_path: str) -> dict:
@@ -98,6 +113,13 @@ def extract_question_from_image(image_path: str) -> dict:
         }
     """
     _load_model()
+
+    try:
+        from core.image_preprocess import preprocess_image
+        processed_path = preprocess_image(image_path)
+    except Exception:
+        processed_path = image_path
+
     image = _load_image(image_path)
     pixel_values = _preprocess_image(image)
 
@@ -134,13 +156,24 @@ def extract_question_from_image(image_path: str) -> dict:
             has_figure = False
             question_text = raw.replace("[有图表]", "").strip()
     else:
-        # 纯文字：提取题目
+        # 纯文字：提取题目（截止到"解答："之前，防止模型多输出内容）
         q_start = raw.find("题目：")
         if q_start != -1:
-            question_text = raw[q_start + 3:].strip()
+            q_content = raw[q_start + 3:]
+            # 如果模型多输出了解答部分，截断
+            for stop in ["解答：", "\n解答", "\n答案", "\n分析"]:
+                stop_idx = q_content.find(stop)
+                if stop_idx != -1:
+                    q_content = q_content[:stop_idx]
+            question_text = q_content.strip()
         else:
             # 模型没按格式输出，把整个输出当题目文本
             question_text = raw.replace("[纯文字]", "").strip()
+            # 同样截断可能的解答内容
+            for stop in ["解答：", "\n解答", "\n答案"]:
+                stop_idx = question_text.find(stop)
+                if stop_idx != -1:
+                    question_text = question_text[:stop_idx].strip()
 
     if not question_text:
         question_text = raw  # 兜底
