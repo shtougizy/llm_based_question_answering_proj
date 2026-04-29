@@ -26,9 +26,10 @@ finetune/test.json
 finetune/test_with_meta.json
 finetune/output/
 
-# ===== LLaMA-Factory & llama.cpp（第三方库，不提交）=====
+# ===== 第三方库，不提交 =====
 LLaMA-Factory/
 llama.cpp/
+MOSS-TTS-Nano/
 
 # ===== Python 缓存 =====
 __pycache__/

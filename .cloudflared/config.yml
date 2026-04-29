@@ -1,0 +1,8 @@
+
+tunnel: my-study-tunnel
+credentials-file: /home/zsy/.cloudflared/1004c9b8-878c-4891-a8e7-a47cb1f36ed2.json
+
+ingress:
+  - hostname: home.dfdh.top          # 你想用的域名（需要已在 DNS 面板配置）
+    service: http://localhost:8000   # 你的 FastAPI 服务地址
+  - service: http_status:404         # 默认规则，未匹配的请求返回 404

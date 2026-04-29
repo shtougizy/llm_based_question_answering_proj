@@ -280,7 +280,14 @@ textarea:focus { border-color: #667eea; }
         <div class="thinking-body" id="thinking-body"></div>
       </div>
 
-      <div style="font-size:0.8rem;color:#9ca3af;margin-bottom:6px;">AI 解析</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <span style="font-size:0.8rem;color:#9ca3af;">AI 解析</span>
+        <button id="tts-btn" onclick="playTTS()"
+          style="background:#f3e8ff;color:#7c3aed;border:1.5px solid #c4b5fd;
+                 border-radius:8px;padding:4px 14px;font-size:0.76rem;cursor:pointer;display:none;">
+          🔊 朗读
+        </button>
+      </div>
       <div class="answer-box" id="result-answer"></div>
 
       <!-- 知识点（已隐藏）-->
@@ -459,6 +466,12 @@ function showResult(data) {
 
   document.getElementById('result-question').textContent = data.question_text;
   document.getElementById('result-answer').textContent = data.llm_answer;
+  // 显示朗读按钮，绑定当前解析文本
+  var ttsBtn = document.getElementById('tts-btn');
+  if (ttsBtn) {
+    ttsBtn.style.display = 'inline-block';
+    ttsBtn._ttsText = data.llm_answer || '';
+  }
 
   // 思考过程
   var thinkingWrap = document.getElementById('thinking-wrap');
@@ -555,6 +568,65 @@ function showError(msg) {
 }
 function hideError() { document.getElementById('error-alert').style.display = 'none'; }
 function setSubmitDisabled(v) { document.getElementById('submit-btn').disabled = v; }
+
+// ==================== TTS 语音朗读 ====================
+var _ttsAudio = null;
+var _ttsPlaying = false;
+
+async function playTTS() {
+  var btn = document.getElementById('tts-btn');
+  if (!btn) return;
+  var text = btn._ttsText || '';
+  if (!text) return;
+
+  // 正在播放则停止
+  if (_ttsPlaying && _ttsAudio) {
+    _ttsAudio.pause();
+    _ttsAudio = null;
+    _ttsPlaying = false;
+    btn.textContent = '🔊 朗读';
+    return;
+  }
+
+  btn.textContent = '⏳ 合成中...';
+  btn.disabled = true;
+
+  try {
+    var token = localStorage.getItem('token') || '';
+    var resp = await fetch('/api/tts', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': token ? 'Bearer ' + token : ''
+      },
+      body: JSON.stringify({ text: text.slice(0, 400), voice: 'Junhao' })
+    });
+    if (!resp.ok) throw new Error('接口错误 ' + resp.status);
+    var data = await resp.json();
+    if (!data.audio_base64) throw new Error('无音频数据');
+
+    // base64 → Blob → 播放
+    var binary = atob(data.audio_base64);
+    var bytes  = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    var blob = new Blob([bytes], { type: 'audio/wav' });
+    _ttsAudio = new Audio(URL.createObjectURL(blob));
+    _ttsAudio.play();
+    _ttsPlaying = true;
+    btn.textContent = '⏹ 停止';
+    _ttsAudio.onended = function() {
+      _ttsPlaying = false;
+      btn.textContent = '🔊 朗读';
+      btn.disabled = false;
+    };
+  } catch(e) {
+    btn.textContent = '🔊 朗读';
+    alert('语音合成失败：' + e.message);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
 </script>
 
 <div class="modal-overlay" id="auth-modal" onclick="closeModalOutside(event)">

@@ -68,6 +68,7 @@ DEFAULT_USER = "default"
 #     logger.info("系统启动完成")
 @app.on_event("startup")
 async def startup():
+    _tts_warmup()  # 后台预热 TTS worker
     import asyncio
     import asyncio
     asyncio.create_task(cleanup_guest_users())
@@ -116,6 +117,9 @@ class MarkWrongRequest(BaseModel):
 
 # 任务存储（简单内存dict，重启后丢失）
 _tasks = {}
+_viz_store = {}  # 临时存储可视化HTML，key为uuid
+
+
 
 @app.post("/api/search/image/async")
 async def search_image_async(
@@ -182,7 +186,7 @@ async def get_task_result(task_id: str):
     return task
 
 
-# @app.post("/api/search/image")
+@app.post("/api/search/image")
 # async def search_by_image(
 #     file: UploadFile = File(...),
 #     username: str = Form(DEFAULT_USER),
@@ -739,6 +743,44 @@ async def wechat_login(code: str):
 #         "user": {"id": user.id, "username": user.username, "role": "student"},
 #         "is_new": is_new,
 #     }
+
+
+@app.post("/api/viz/store")
+async def store_viz(request: Request):
+    """存储可视化HTML，返回访问key"""
+    import uuid as _uuid
+    body = await request.json()
+    html = body.get("html", "")
+    key = _uuid.uuid4().hex
+    _viz_store[key] = html
+    return {"key": key}
+
+@app.get("/api/viz/{key}")
+async def get_viz(key: str):
+    """通过key获取可视化HTML页面"""
+    from fastapi.responses import HTMLResponse
+    html = _viz_store.get(key, "<h1>已过期或不存在</h1>")
+    return HTMLResponse(content=html)
+
+
+from core.tts import synthesize as _tts_synthesize, warmup as _tts_warmup
+import base64 as _base64
+
+@app.post("/api/tts")
+async def text_to_speech(request: Request):
+    body = await request.json()
+    text = body.get("text", "").strip()
+    if not text:
+        raise HTTPException(400, "text不能为空")
+    try:
+        wav_bytes = await asyncio.get_event_loop().run_in_executor(
+            None, _tts_synthesize, text
+        )
+        audio_b64 = _base64.b64encode(wav_bytes).decode()
+        return {"audio_base64": audio_b64, "format": "wav"}
+    except Exception as e:
+        raise HTTPException(502, f"TTS合成失败：{str(e)}")
+
 
 @app.get("/health")
 async def health():
