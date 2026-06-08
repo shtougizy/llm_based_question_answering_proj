@@ -1,0 +1,139 @@
+<wxs module="utils">
+  function formatPercent(num) {
+    if (!num && num !== 0) return '0';
+    return (num * 100).toFixed(0);
+  }
+  module.exports = {
+    formatPercent: formatPercent
+  };
+</wxs>
+
+<view class="page">
+  <!-- 顶部栏 -->
+  <!-- <view class="header">
+    <text class="header-title">📚 拍照搜题</text>
+    <view class="header-user" bindtap="onUserTap">
+      <text class="user-text" wx:if="{{isGuest}}">游客</text>
+      <text class="user-text" wx:else>👤 我的</text>
+    </view>
+  </view> -->
+  <view class="header">
+    <view class="header-left">
+      <navigator url="/pages/login/login" class="header-user-btn">
+        <text class="header-user-icon">{{isGuest ? '👤' : '😊'}}</text>
+        <text class="header-user-text">{{isGuest ? '登录/注册' : user.username}}</text>
+      </navigator>
+    </view>
+    <text class="header-title">📚 拍照搜题</text>
+    <view class="header-right"></view>
+  </view>
+
+
+  <!-- 输入区 -->
+  <view class="card input-card">
+    <!-- 图片上传区 -->
+    <view class="upload-area" bindtap="onChooseImage" wx:if="{{!imagePath}}">
+      <text class="upload-icon">📷</text>
+      <text class="upload-text">点击拍照或选择图片</text>
+      <text class="upload-hint">支持 JPG / PNG 格式</text>
+    </view>
+    <view class="image-preview" wx:else>
+      <image class="preview-img" src="{{imagePath}}" mode="aspectFit"></image>
+      <view class="clear-btn" bindtap="onClearImage">✕ 重选</view>
+    </view>
+
+    <view class="divider"><text>或输入题目文字</text></view>
+
+    <textarea
+      class="text-input"
+      placeholder="在此输入题目内容..."
+      value="{{textInput}}"
+      bindinput="onTextInput"
+      maxlength="500"
+      auto-height
+    ></textarea>
+
+    <view class="btn-row">
+      <!-- 程序题可视化选项 -->
+      <view class="viz-row">
+        <switch checked="{{needViz}}" bindchange="onVizChange" color="#667eea" style="transform:scale(0.8)"/>
+        <text class="viz-label">程序题可视化（算法/代码题勾选）</text>
+      </view>
+      <button class="btn-primary submit-btn" bindtap="onSubmit" disabled="{{loading}}">
+        {{loading ? loadingText : '🔍 搜题解答'}}
+      </button>
+    </view>
+  </view>
+
+  <!-- 解题结果 -->
+  <view class="card result-card" wx:if="{{result}}">
+    <view class="result-title">解题结果</view>
+
+
+    <!-- 标签 -->
+    <view class="tags-row">
+      <text class="tag tag-green" wx:if="{{result.matched_from_bank}}">
+        <!-- ✅ 题库命中 {{(result.similarity * 100).toFixed(0)}}% -->
+        ✅ 题库命中 {{utils.formatPercent(result.similarity)}}%
+
+      </text>
+      <text class="tag tag-blue" wx:else>🤖 AI 推理</text>
+      <text class="tag tag-purple" wx:if="{{result.answered_by_vl}}">📊 图表解析</text>
+    </view>
+
+    <!-- 识别题目 -->
+    <view class="section-label">识别的题目</view>
+    <view class="question-box">{{result.question_text}}</view>
+
+    <!-- 思考过程（可折叠） -->
+    <view class="thinking-wrap" wx:if="{{result.llm_thinking}}">
+      <view class="thinking-header" bindtap="toggleThinking">
+        <text>🧠 模型思考过程</text>
+        <text class="thinking-arrow">{{showThinking ? '▲' : '▼'}}</text>
+      </view>
+      <view class="thinking-body" wx:if="{{showThinking}}">{{result.llm_thinking}}</view>
+    </view>
+
+    <!-- AI 解析 -->
+    <view class="section-label">AI 解析</view>
+    <view class="answer-box">{{result.llm_answer}}</view>
+    <view class="tts-row" wx:if="{{result && result.llm_answer}}">
+      <button class="tts-btn" bindtap="onPlayTTS" disabled="{{ttsLoading}}">
+        {{ttsPlaying ? '⏹ 停止朗读' : ttsLoading ? '⏳ 合成中...' : '🔊 朗读解析'}}
+      </button>
+    </view>
+
+    <!-- 程序题可视化 -->
+    <view class="viz-container" wx:if="{{showViz && vizUrl}}">
+      <view class="viz-title">🖥️ 程序题可视化</view>
+      <text class="viz-hint">点击下方按钮查看算法可视化动画</text>
+      <button class="viz-btn" bindtap="onOpenViz">▶ 打开可视化演示</button>
+    </view>
+
+    <!-- 操作按钮 -->
+    <view class="action-row">
+      <button class="btn-wrong" bindtap="onMarkWrong" disabled="{{markDone}}">
+        {{markDone ? '✅ 已加入错题本' : '❌ 加入错题本'}}
+      </button>
+      <button class="btn-reset" bindtap="onReset">🔄 重新搜题</button>
+    </view>
+  </view>
+
+  <!-- Loading -->
+  <!-- <view class="loading-overlay" wx:if="{{loading}}">
+    <view class="loading-box">
+      <view class="spinner"></view>
+      <text class="loading-text">{{loadingText}}</text>
+    </view>
+  </view> -->
+  <view class="loading-overlay" wx:if="{{loading}}">
+  <view class="loading-box">
+    <view class="spinner"></view>
+    <text class="loading-text">{{loadingText}}</text>
+    <view class="tip-box" wx:if="{{tipText}}">
+      <text class="tip-label">💡 学习小知识</text>
+      <text class="tip-text">{{tipText}}</text>
+    </view>
+  </view>
+</view>
+</view>

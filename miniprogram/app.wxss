@@ -1,0 +1,60 @@
+page {
+  background: #f0f4f8;
+  font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+}
+
+.card {
+  background: #fff;
+  border-radius: 16rpx;
+  padding: 32rpx;
+  margin: 20rpx 24rpx;
+  box-shadow: 0 4rpx 24rpx rgba(0,0,0,0.08);
+}
+
+.btn-primary {
+  background: linear-gradient(135deg, #667eea, #764ba2);
+  color: #fff;
+  border-radius: 16rpx;
+  font-size: 32rpx;
+  font-weight: 600;
+  padding: 24rpx 0;
+  text-align: center;
+  border: none;
+}
+
+.btn-outline {
+  background: transparent;
+  color: #667eea;
+  border: 2rpx solid #667eea;
+  border-radius: 16rpx;
+  font-size: 28rpx;
+  padding: 18rpx 0;
+  text-align: center;
+}
+
+.tag {
+  display: inline-block;
+  padding: 6rpx 16rpx;
+  border-radius: 20rpx;
+  font-size: 22rpx;
+  font-weight: 500;
+}
+.tag-purple { background: #f3e8ff; color: #7c3aed; }
+.tag-green  { background: #d1fae5; color: #059669; }
+.tag-blue   { background: #dbeafe; color: #1d4ed8; }
+.tag-orange { background: #ffedd5; color: #c2410c; }
+.tag-red    { background: #fef2f2; color: #dc2626; }
+.tag-gray   { background: #f3f4f6; color: #6b7280; }
+
+.empty-state {
+  text-align: center;
+  padding: 80rpx 40rpx;
+  color: #9ca3af;
+}
+.empty-icon { font-size: 80rpx; margin-bottom: 20rpx; }
+.empty-text { font-size: 28rpx; }
+
+.loading-wrap {
+  text-align: center;
+  padding: 60rpx;
+}

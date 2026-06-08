@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<style>*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"SimSun","Times New Roman",serif;background:#fff;padding:30px;text-align:center}</style>
+</head>
+<body>
+<svg width="580" height="560" viewBox="0 0 580 560" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#111"/></marker>
+    <marker id="aL" markerWidth="8" markerHeight="6" refX="0" refY="3" orient="auto"><polygon points="8 0, 0 3, 8 6" fill="#111"/></marker>
+  </defs>
+
+  <rect x="230" y="4" width="120" height="32" rx="16" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="290" y="25" text-anchor="middle" font-size="14" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">开始</text>
+  <line x1="290" y1="36" x2="290" y2="66" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+
+  <rect x="215" y="68" width="150" height="30" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="290" y="88" text-anchor="middle" font-size="13" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">用户拍照 / 选图</text>
+
+  <!-- T-branch: arrows on the horizontal line -->
+  <line x1="290" y1="98" x2="290" y2="104" stroke="#111" stroke-width="2"/>
+  <line x1="110" y1="104" x2="470" y2="104" stroke="#111" stroke-width="2" marker-start="url(#aL)" marker-end="url(#a)"/>
+  <line x1="110" y1="104" x2="110" y2="116" stroke="#111" stroke-width="2"/>
+  <line x1="470" y1="104" x2="470" y2="116" stroke="#111" stroke-width="2"/>
+
+  <!-- LEFT -->
+  <rect x="40" y="116" width="140" height="34" rx="17" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="110" y="138" text-anchor="middle" font-size="14" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">微信小程序</text>
+
+  <!-- RIGHT -->
+  <rect x="400" y="116" width="140" height="34" rx="17" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="470" y="138" text-anchor="middle" font-size="14" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">FastAPI 后端</text>
+
+  <line x1="180" y1="133" x2="398" y2="133" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+  <text x="289" y="126" text-anchor="middle" font-size="10" fill="#111" font-weight="bold" font-family="'Times New Roman',SimSun,serif">POST 上传图片 → 立即返回 task_id</text>
+
+  <line x1="110" y1="150" x2="110" y2="178" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="40" y="180" width="140" height="48" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="110" y="202" text-anchor="middle" font-size="13" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">轮询任务状态</text>
+  <text x="110" y="220" text-anchor="middle" font-size="10" fill="#111" font-family="'Times New Roman',SimSun,serif">GET /api/task/{id} · 3s/次</text>
+
+  <line x1="470" y1="150" x2="470" y2="178" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="400" y="180" width="140" height="30" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="470" y="200" text-anchor="middle" font-size="12" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">生成 task_id</text>
+
+  <line x1="470" y1="210" x2="470" y2="236" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="400" y="238" width="140" height="44" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="470" y="258" text-anchor="middle" font-size="12" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">后台线程池执行</text>
+  <text x="470" y="274" text-anchor="middle" font-size="10" fill="#111" font-family="'Times New Roman',SimSun,serif">InternVL识别+Qwen3推理</text>
+
+  <line x1="470" y1="282" x2="470" y2="308" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="400" y="310" width="140" height="30" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="470" y="330" text-anchor="middle" font-size="12" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">结果写入 Redis</text>
+
+  <line x1="180" y1="210" x2="398" y2="210" stroke="#111" stroke-width="1.5" stroke-dasharray="6,3" marker-end="url(#a)"/>
+  <text x="289" y="204" text-anchor="middle" font-size="9" fill="#111" font-family="'Times New Roman',SimSun,serif">查询任务状态 →</text>
+  <line x1="398" y1="220" x2="180" y2="220" stroke="#111" stroke-width="1.5" stroke-dasharray="6,3" marker-end="url(#a)"/>
+  <text x="289" y="233" text-anchor="middle" font-size="9" fill="#111" font-family="'Times New Roman',SimSun,serif">← 返回 status</text>
+
+  <line x1="110" y1="228" x2="110" y2="256" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="40" y="258" width="140" height="30" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="110" y="278" text-anchor="middle" font-size="12" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">pending → 继续等待</text>
+  <polyline points="40,273 12,273 12,204 38,204" fill="none" stroke="#111" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#a)"/>
+
+  <line x1="110" y1="288" x2="110" y2="316" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="40" y="318" width="140" height="42" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="110" y="338" text-anchor="middle" font-size="13" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">status = done</text>
+  <text x="110" y="354" text-anchor="middle" font-size="10" fill="#111" font-family="'Times New Roman',SimSun,serif">解析 JSON 渲染页面</text>
+
+  <line x1="110" y1="360" x2="110" y2="388" stroke="#111" stroke-width="2"/>
+  <line x1="110" y1="388" x2="290" y2="388" stroke="#111" stroke-width="2"/>
+  <line x1="290" y1="388" x2="290" y2="404" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="230" y="406" width="120" height="32" rx="16" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="290" y="427" text-anchor="middle" font-size="14" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">结束</text>
+
+  <text x="290" y="466" text-anchor="middle" font-size="11" fill="#111" font-family="'Times New Roman',SimSun,serif">设计要点：将长连接拆为多次短轮询，每次 &lt; 1s，不受 Cf Tunnel 100s 限制</text>
+</svg>
+</body>
+</html>

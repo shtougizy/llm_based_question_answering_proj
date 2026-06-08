@@ -129,6 +129,35 @@ body { font-family: "PingFang SC", "Microsoft YaHei", sans-serif; background: #f
 .pq-ans-box{background:#f0fdf4;border-radius:8px;padding:10px 12px;font-size:0.85rem;color:#166534;line-height:1.7;white-space:pre-wrap;}
 .pq-show-btn{margin-top:8px;padding:5px 14px;border:1.5px solid #86efac;background:transparent;border-radius:7px;font-size:0.78rem;color:#059669;cursor:pointer;font-weight:600;}
 .pq-show-btn:hover{background:#d1fae5;}
+
+/* ===== 学习路径样式 ===== */
+.learning-path{margin-top:16px;position:relative;}
+.lp-stage{border-radius:14px;padding:18px;margin-bottom:4px;border:2px solid #e5e7eb;background:#fff;box-shadow:0 1px 6px rgba(0,0,0,0.04);}
+.lp-stage-1{border-left:5px solid #4CAF50;}
+.lp-stage-2{border-left:5px solid #FF9800;}
+.lp-stage-3{border-left:5px solid #F44336;}
+.lp-stage-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap;}
+.lp-stage-badge{display:inline-block;padding:4px 12px;border-radius:20px;font-size:0.78rem;font-weight:700;color:#fff;}
+.lp-stage-1 .lp-stage-badge{background:#4CAF50;}
+.lp-stage-2 .lp-stage-badge{background:#FF9800;}
+.lp-stage-3 .lp-stage-badge{background:#F44336;}
+.lp-stage-label{font-size:0.95rem;font-weight:700;color:#1f2937;}
+.lp-stage-kp{font-size:0.78rem;color:#6b7280;}
+.lp-arrow{text-align:center;font-size:1.4rem;color:#9ca3af;padding:2px 0;margin-bottom:4px;user-select:none;}
+.lp-q-header{display:flex;align-items:flex-start;gap:8px;}
+.lp-q-num{width:22px;height:22px;background:#f3f4f6;color:#6b7280;border-radius:6px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;flex-shrink:0;}
+.lp-q-content{flex:1;font-size:0.85rem;color:#374151;line-height:1.55;}
+.lp-q-meta{display:flex;gap:5px;flex-wrap:wrap;margin-top:5px;}
+.lp-q-answer{display:none;margin-top:10px;padding-top:10px;border-top:1px solid #d1fae5;}
+.lp-q-answer.show{display:block;}
+.lp-q-ans-box{background:#f0fdf4;border-radius:8px;padding:8px 10px;font-size:0.82rem;color:#166534;line-height:1.65;white-space:pre-wrap;}
+.lp-q-card{background:#fafbfc;border-radius:10px;padding:12px;margin-bottom:8px;border:1.5px solid #e5e7eb;cursor:pointer;}
+.lp-q-card:hover{border-color:#a78bfa;}
+.lp-q-card.ans-shown{border-color:#86efac;background:#f0fdf4;}
+.lp-q-show-btn{margin-top:6px;padding:4px 12px;border:1.5px solid #86efac;background:transparent;border-radius:6px;font-size:0.75rem;color:#059669;cursor:pointer;font-weight:600;}
+.lp-q-show-btn:hover{background:#d1fae5;}
+.lp-path-intro{font-size:0.82rem;color:#6b7280;margin-bottom:10px;padding:8px 12px;background:#fefce8;border-radius:8px;border:1px solid #fde68a;}
+.lp-path-intro strong{color:#92400e;}
 .report-card{background:#fff;border-radius:14px;padding:22px;box-shadow:0 2px 12px rgba(0,0,0,0.07);margin-bottom:18px;}
 .report-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;}
 .report-title{font-size:1rem;font-weight:600;color:#374151;}
@@ -650,9 +679,55 @@ async function loadPractice(){
   finally{btn.disabled=false;btn.textContent="重新生成";}
 }
 
+function renderQuestionCard(q, pi, qi, idPrefix){
+  const ans=Array.isArray(q.ques_answer)?q.ques_answer.join("、"):(q.ques_answer||"");
+  const kns=(q.ques_knowledges||[]).slice(0,3);
+  return `<div class="${idPrefix==='pq'?'practice-q-card':'lp-q-card'}" id="${idPrefix}c-${pi}-${qi}">
+    <div class="${idPrefix==='pq'?'pq-header':'lp-q-header'}">
+      <div class="${idPrefix==='pq'?'pq-num':'lp-q-num'}">${qi+1}</div>
+      <div class="${idPrefix==='pq'?'pq-content':'lp-q-content'}">${esc(q.ques_content||"")}
+        <div class="${idPrefix==='pq'?'pq-meta':'lp-q-meta'}">${q.subject?`<span class="tag tp">${q.subject}</span>`:""} ${q.ques_type?`<span class="tag to">${q.ques_type}</span>`:""} ${q.ques_difficulty?`<span class="tag tg">${q.ques_difficulty}</span>`:""} ${kns.map(k=>`<span class="kn-tag">${k}</span>`).join("")}</div>
+      </div>
+    </div>
+    <div class="${idPrefix==='pq'?'pq-answer':'lp-q-answer'}" id="${idPrefix}a-${pi}-${qi}"><div class="${idPrefix==='pq'?'pq-ans-box':'lp-q-ans-box'}">✅ 答案：${esc(ans)}${q.ques_analyze?"\n\n📖 解析："+esc(q.ques_analyze):""}</div></div>
+    <button class="${idPrefix==='pq'?'pq-show-btn':'lp-q-show-btn'}" onclick="${idPrefix==='pq'?'toggleAns':'togglePathAns'}(${pi},${qi})">查看答案</button>
+  </div>`;
+}
+
 function buildPracticeSection(plan,pi){
   const sc=plan.severity==="高"?"#dc2626":plan.severity==="中"?"#d97706":"#059669";
-  const qs=plan.practice_questions||[];
+
+  // 知识图谱增强：有学习路径时显示阶段式布局
+  if(plan.has_learning_path && plan.learning_path && plan.learning_path.length){
+    var totalQs=0;
+    plan.learning_path.forEach(function(s){ totalQs += (s.questions||[]).length; });
+    var stagesHtml=plan.learning_path.map(function(stage,si){
+      var qs=stage.questions||[];
+      if(!qs.length) return "";
+      var icon=stage.stage===1?"🟢":stage.stage===2?"🟡":"🔴";
+      return `<div class="lp-stage lp-stage-${stage.stage}">
+        <div class="lp-stage-header">
+          <span class="lp-stage-badge">${icon} 第${stage.stage}步</span>
+          <span class="lp-stage-label">${esc(stage.label||"")}</span>
+          <span class="lp-stage-kp">${esc((stage.knowledge_points||[]).join("、"))} · ${qs.length} 题</span>
+        </div>
+        ${qs.map(function(q,qi){ return renderQuestionCard(q, si, qi, 'lp'); }).join("")}
+      </div>`;
+    }).join("<div class=\"lp-arrow\">↓</div>");
+
+    return `<div class="practice-section">
+      <div class="practice-cluster-header">
+        <div style="font-size:1.5rem">🎯</div>
+        <div class="pch-info"><div class="pch-title">针对知识群：${esc(plan.label)}</div><div class="pch-desc">薄弱程度 <strong style="color:${sc}">${plan.severity}</strong> · ${plan.subjects.join("、")||""} · 共 ${totalQs} 道 · <strong>学习路径模式</strong></div></div>
+        <span class="pch-badge" style="background:${sc}22;color:${sc}">错题 ${plan.wrong_count} 道</span>
+      </div>
+      <div class="lp-path-intro">💡 系统检测到该知识群存在前置依赖关系，已按<strong>基础→进阶</strong>的学习顺序组织练习题。建议按步骤逐层完成。</div>
+      <div class="learning-path">${stagesHtml}</div>
+    </div>`;
+  }
+
+  // 原有平铺模式（无学习路径时）
+  var qs=plan.practice_questions||[];
   if(!qs.length) return "";
   return `<div class="practice-section">
     <div class="practice-cluster-header">
@@ -660,29 +735,28 @@ function buildPracticeSection(plan,pi){
       <div class="pch-info"><div class="pch-title">针对知识群：${esc(plan.label)}</div><div class="pch-desc">薄弱程度 <strong style="color:${sc}">${plan.severity}</strong> · ${plan.subjects.join("、")||""} · 共 ${qs.length} 道</div></div>
       <span class="pch-badge" style="background:${sc}22;color:${sc}">错题 ${plan.wrong_count} 道</span>
     </div>
-    ${qs.map((q,qi)=>{
-      const ans=Array.isArray(q.ques_answer)?q.ques_answer.join("、"):(q.ques_answer||"");
-      const kns=(q.ques_knowledges||[]).slice(0,3);
-      return `<div class="practice-q-card" id="pqc-${pi}-${qi}">
-        <div class="pq-header">
-          <div class="pq-num">${qi+1}</div>
-          <div class="pq-content">${esc(q.ques_content||"")}
-            <div class="pq-meta">${q.subject?`<span class="tag tp">${q.subject}</span>`:""} ${q.ques_type?`<span class="tag to">${q.ques_type}</span>`:""} ${q.ques_difficulty?`<span class="tag tg">${q.ques_difficulty}</span>`:""} ${kns.map(k=>`<span class="kn-tag">${k}</span>`).join("")}</div>
-          </div>
-        </div>
-        <div class="pq-answer" id="pqa-${pi}-${qi}"><div class="pq-ans-box">✅ 答案：${esc(ans)}${q.ques_analyze?"\n\n📖 解析："+esc(q.ques_analyze):""}</div></div>
-        <button class="pq-show-btn" onclick="toggleAns(${pi},${qi})">查看答案</button>
-      </div>`;
-    }).join("")}
+    ${qs.map(function(q,qi){ return renderQuestionCard(q, pi, qi, 'pq'); }).join("")}
   </div>`;
 }
 
 function toggleAns(pi,qi){
-  const ans=document.getElementById(`pqa-${pi}-${qi}`);
-  const card=document.getElementById(`pqc-${pi}-${qi}`);
-  const show=ans.classList.toggle("show");
+  var ans=document.getElementById("pqa-"+pi+"-"+qi);
+  var card=document.getElementById("pqc-"+pi+"-"+qi);
+  if(!ans||!card) return;
+  var show=ans.classList.toggle("show");
   card.classList.toggle("ans-shown",show);
-  card.querySelector(".pq-show-btn").textContent=show?"隐藏答案":"查看答案";
+  var btn=card.querySelector(".pq-show-btn");
+  if(btn) btn.textContent=show?"隐藏答案":"查看答案";
+}
+
+function togglePathAns(si,qi){
+  var ans=document.getElementById("lpa-"+si+"-"+qi);
+  var card=document.getElementById("lpc-"+si+"-"+qi);
+  if(!ans||!card) return;
+  var show=ans.classList.toggle("show");
+  card.classList.toggle("ans-shown",show);
+  var btn=card.querySelector(".lp-q-show-btn");
+  if(btn) btn.textContent=show?"隐藏答案":"查看答案";
 }
 
 // ========== AI 报告 ==========

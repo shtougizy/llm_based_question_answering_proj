@@ -1,0 +1,28 @@
+.page { min-height: 100vh; background: #f0f4f8; padding-bottom: 120rpx; }
+.stats-row { display: flex; gap: 16rpx; padding: 24rpx 24rpx 0; }
+.stat-card { flex: 1; background: #fff; border-radius: 16rpx; padding: 20rpx 10rpx; text-align: center; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.07); }
+.stat-num { font-size: 40rpx; font-weight: 700; display: block; }
+.stat-label { font-size: 20rpx; color: #9ca3af; display: block; margin-top: 4rpx; }
+.purple { color: #7c3aed; } .red { color: #dc2626; } .green { color: #059669; } .blue { color: #2563eb; }
+.filter-bar { margin: 20rpx 24rpx; background: #fff; border-radius: 16rpx; padding: 16rpx 20rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.07); }
+.filter-tabs { display: flex; gap: 10rpx; margin-bottom: 16rpx; }
+.filter-tab { flex: 1; text-align: center; padding: 10rpx; border-radius: 10rpx; font-size: 26rpx; color: #6b7280; }
+.filter-tab.active { background: linear-gradient(135deg, #667eea, #764ba2); color: #fff; }
+.search-input { background: #f3f4f6; border-radius: 10rpx; padding: 10rpx 16rpx; font-size: 26rpx; width: 100%; box-sizing: border-box; }
+.loading-wrap { text-align: center; padding: 80rpx; color: #9ca3af; }
+.spinner { width: 60rpx; height: 60rpx; border: 5rpx solid #e5e7eb; border-top-color: #667eea; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 20rpx; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.record-card { background: #fff; border-radius: 16rpx; margin: 12rpx 24rpx; padding: 24rpx; box-shadow: 0 2rpx 12rpx rgba(0,0,0,0.07); border-left: 6rpx solid transparent; }
+.wrong-card { border-left-color: #fca5a5; background: #fffafa; }
+.expanded { border-color: #667eea; }
+.record-header { display: flex; align-items: flex-start; gap: 16rpx; }
+.record-icon { font-size: 36rpx; flex-shrink: 0; }
+.record-main { flex: 1; min-width: 0; }
+.record-q { font-size: 28rpx; color: #1f2937; display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; line-height: 1.5; }
+.record-meta { display: flex; flex-wrap: wrap; gap: 8rpx; margin-top: 10rpx; align-items: center; }
+.time-text { font-size: 22rpx; color: #9ca3af; margin-left: auto; }
+.record-detail { margin-top: 20rpx; padding-top: 20rpx; border-top: 1rpx solid #f3f4f6; }
+.detail-label { font-size: 22rpx; color: #9ca3af; display: block; margin-bottom: 10rpx; }
+.detail-answer { font-size: 26rpx; line-height: 1.7; color: #166534; background: #f0fdf4; border-radius: 10rpx; padding: 16rpx; display: block; margin-bottom: 16rpx; }
+.mark-btn { width: 100%; background: #fef2f2; color: #dc2626; border: 2rpx solid #fca5a5; border-radius: 10rpx; font-size: 26rpx; padding: 14rpx 0; }
+.mark-done { background: #f3f4f6; color: #9ca3af; border-color: #e5e7eb; }

@@ -134,7 +134,7 @@
 
 [//]: # (| 图像预处理 | OpenCV（透视校正、CLAHE增强、inpaint去笔迹、去噪） |)
 
-[//]: # (| 数据库 | SQLite + SQLAlchemy（6张表） |)
+[//]: # (| 数据库 | SQLite + SQLAlchemy（7张表） |)
 
 [//]: # (| 聚类分析 | KMeans（纯 numpy 实现，含 KMeans++ 初始化） |)
 
@@ -653,7 +653,7 @@
 
 基于多模态大模型 + RAG 检索增强生成 + KMeans 聚类分析的 K12 智能学习辅助系统。
 
-本项目最后更新时间：2026.4.26
+本项目最后更新时间：2026.6.8
 
 ---
 
@@ -674,8 +674,9 @@
 │   ├── multimodal.py              # 多模态识别模块（InternVL3.5-2B，含图像预处理调用）
 │   ├── retrieval.py               # 向量检索模块（FAISS + BGE，本地加载）
 │   ├── llm.py                     # 语言模型推理模块（Qwen3-1.7B-GGUF，微调后）
-│   ├── database.py                # 数据库 ORM 与操作（SQLAlchemy + SQLite，6张表）
-│   ├── analysis.py                # KMeans 聚类分析与练习推荐模块
+│   ├── database.py                # 数据库 ORM 与操作（SQLAlchemy + SQLite，7张表）
+│   ├── analysis.py                # KMeans 聚类分析与练习推荐模块（含 KG 增强学习路径）
+│   ├── kg.py                      # 知识图谱模块（BFS 展开 + 拓扑排序 + 分阶段学习路径）
 │   ├── auth.py                    # JWT 用户认证、密码哈希、短信验证码
 │   ├── image_preprocess.py        # 图像预处理模块（透视校正、去噪、圈画弱化）
 │   └── tts.py                     # TTS 模块（通过 subprocess 调用 tts 环境 worker）
@@ -684,9 +685,19 @@
 │   └── templates/
 │       ├── index.html             # 首页（拍照/文字搜题，汉堡菜单，语音朗读）
 │       ├── history.html           # 历史记录页
-│       ├── wrong_book.html        # 错题本页（4个Tab，MathJax公式渲染）
+│       ├── wrong_book.html        # 错题本页（4个Tab，KG学习路径，MathJax公式渲染）
 │       ├── login.html             # 登录页
 │       └── register.html          # 注册页
+│
+├── miniprogram/                   # 微信小程序（原生框架，3个Tab页）
+│   ├── app.json
+│   ├── pages/                     # index/history/wrongbook/login/webview
+│   └── utils/api.js               # API 调用封装
+│
+├── scripts/
+│   └── extract_kg_relations.py    # 知识图谱关系抽取脚本（LLM 提取前置依赖）
+│
+├── diagrams/                      # 毕业论文配图（9张 SVG/HTML 架构图）
 │
 ├── MOSS-TTS-Nano/                 # 语音合成模型仓库（ONNX CPU版）
 │   ├── infer_onnx.py              # ONNX 推理入口
@@ -729,6 +740,7 @@
 | 图像预处理 | OpenCV（透视校正、CLAHE增强、inpaint去笔迹、去噪） |
 | 数据库 | SQLite + SQLAlchemy（6张表） |
 | 聚类分析 | KMeans++（纯numpy实现） |
+| 知识图谱 | 知识点前置依赖图 + BFS 展开 + 拓扑排序 + 分阶段学习路径 |
 | 用户认证 | JWT + bcrypt + 短信验证码 |
 | 模型微调 | LLaMA-Factory + QLoRA（int4量化） |
 | 公网穿透 | Cloudflare Tunnel（home.dfdfh.top） |
@@ -764,7 +776,15 @@
 - **练习推荐**：题库匹配 + InternVL 生成兜底；SSE 流式逐题推送
 - **AI 报告**：InternVL 生成个性化错题分析与学习建议
 
-### 5. 用户系统
+### 5. 知识图谱学习路径
+- 离线阶段通过 LLM 抽取知识点之间的前置依赖关系，存入 `kg_relations` 表
+- 在线阶段从用户薄弱知识点出发，BFS 向上游展开前置依赖链（可配置深度）
+- 对展开的依赖图执行 Kahn 拓扑排序，生成从基础到进阶的学习顺序
+- 将排序结果自动划分为「基础巩固 → 过渡提升 → 核心突破」三个学习阶段
+- 每个阶段匹配题库练习题，题库不足时由 InternVL 自动生成兜底
+- 练习计划 API 返回 `kg_enabled` 标记，前端据此展示分阶段学习路径 UI
+
+### 6. 用户系统
 - 手机号注册 + JWT 登录（7天有效）
 - 微信小程序一键登录（openid → 自动注册 → JWT）
 - 游客模式（无需注册）
@@ -782,6 +802,7 @@
 | user_auth | 认证（密码/openid/角色） |
 | solve_records | 解题记录（含思考过程、可视化HTML） |
 | knowledge_stats | 知识点错误统计 |
+| kg_relations | 知识图谱前置依赖关系（知识点 → 前置知识点） |
 
 ---
 
@@ -802,23 +823,30 @@
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| POST | `/api/search/image` | 图片搜题（同步） |
 | POST | `/api/search/image/async` | 图片搜题（异步，返回task_id） |
 | GET | `/api/task/{task_id}` | 轮询异步任务结果 |
 | POST | `/api/search/text` | 文字搜题 |
 | POST | `/api/tts` | 语音合成（MOSS-TTS-Nano） |
 | POST | `/api/mark-wrong` | 标记错题 |
-| GET | `/api/history` | 解题历史 |
+| POST | `/api/unmark-wrong` | 取消错题标记 |
+| POST | `/api/delete-records` | 批量删除解题记录 |
+| GET | `/api/history` | 解题历史（多维筛选） |
 | GET | `/api/wrong-book` | 错题本 |
-| GET | `/api/wrong-report` | AI 错题报告 |
-| GET | `/api/knowledge-stats` | 知识点统计 |
+| GET | `/api/wrong-report` | AI 错题报告（InternVL 生成） |
+| GET | `/api/knowledge-stats` | 知识点错误统计 |
 | GET | `/api/cluster-analysis` | KMeans 聚类分析 |
-| GET | `/api/practice-plan` | 个性化练习计划 |
-| GET | `/api/practice-by-knowledge-stream` | 流式练习题生成（SSE） |
-| POST | `/api/auth/wechat-login` | 微信小程序登录 |
-| POST | `/api/auth/register` | 注册 |
-| POST | `/api/auth/login` | 登录 |
-| POST | `/api/auth/guest` | 游客登录 |
+| GET | `/api/practice-plan` | 个性化练习计划（支持 KG 增强学习路径） |
+| GET | `/api/practice-by-knowledge` | 按知识点生成专项练习 |
+| GET | `/api/practice-by-knowledge-stream` | 流式逐题生成练习（SSE） |
+| POST | `/api/viz/store` | 存储可视化 HTML，返回访问 key |
+| GET | `/api/viz/{key}` | 获取可视化 HTML |
+| POST | `/api/auth/send-sms` | 发送短信验证码 |
+| POST | `/api/auth/register` | 注册（手机号+用户名+密码） |
+| POST | `/api/auth/login` | 登录（用户名+密码，返回 JWT） |
+| POST | `/api/auth/guest` | 游客登录（自动创建临时用户） |
+| POST | `/api/auth/wechat-login` | 微信小程序登录（code 换 openid → JWT） |
+| GET | `/api/auth/me` | 获取当前用户信息 |
+| GET | `/health` | 健康检查 |
 
 ---
 
@@ -874,7 +902,14 @@ python3 backend/init_db.py
 python3 migrate_questions.py
 ```
 
-### 4. 配置
+### 4. 知识图谱关系抽取（可选）
+
+```bash
+conda activate study_ai
+python3 scripts/extract_kg_relations.py
+```
+
+### 5. 配置
 
 在 `config.py` 中填写：
 ```python
@@ -882,7 +917,7 @@ WECHAT_APPID  = "你的AppID"
 WECHAT_SECRET = "你的AppSecret"
 ```
 
-### 5. 启动服务
+### 6. 启动服务
 
 ```bash
 # 终端1：主服务（TTS worker 由主服务自动启动）
@@ -932,4 +967,6 @@ rm -rf ~/.cache/huggingface/modules/transformers_modules/InternVL3_5*
 - [x] MathJax 公式渲染
 - [x] Cloudflare Tunnel 公网部署（home.dfdfh.top）
 - [x] 本地语音合成（MOSS-TTS-Nano ONNX，独立 tts 环境，中英文朗读）
-- [ ] 知识图谱构建
+- [x] 知识图谱构建（LLM 抽取前置依赖 + BFS 展开 + 拓扑排序 + 三阶段学习路径）
+- [x] 微信小程序端 TTS 语音朗读
+- [x] 知识图谱增强练习推荐（分阶段学习路径 + 题库匹配 + LLM 兜底生成）

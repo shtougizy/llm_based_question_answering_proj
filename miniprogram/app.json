@@ -1,0 +1,44 @@
+{
+  "pages": [
+    "pages/index/index",
+    "pages/history/history",
+    "pages/wrongbook/wrongbook",
+    "pages/login/login",
+    "pages/webview/webview"
+  ],
+  "window": {
+    "backgroundTextStyle": "light",
+    "navigationBarBackgroundColor": "#667eea",
+    "navigationBarTitleText": "拍照搜题",
+    "navigationBarTextStyle": "white",
+    "backgroundColor": "#f0f4f8"
+  },
+  "tabBar": {
+    "color": "#9ca3af",
+    "selectedColor": "#667eea",
+    "backgroundColor": "#ffffff",
+    "borderStyle": "white",
+    "list": [
+      {
+        "pagePath": "pages/index/index",
+        "text": "搜题",
+        "iconPath": "assets/icons/search.png",
+        "selectedIconPath": "assets/icons/search_active.png"
+      },
+      {
+        "pagePath": "pages/history/history",
+        "text": "历史",
+        "iconPath": "assets/icons/history.png",
+        "selectedIconPath": "assets/icons/history_active.png"
+      },
+      {
+        "pagePath": "pages/wrongbook/wrongbook",
+        "text": "错题本",
+        "iconPath": "assets/icons/wrong.png",
+        "selectedIconPath": "assets/icons/wrong_active.png"
+      }
+    ]
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

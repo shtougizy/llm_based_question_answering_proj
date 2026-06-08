@@ -53,6 +53,25 @@ Path(UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
 
 app = FastAPI(title="拍照搜题辅助学习系统", version="1.0.0")
 
+from fastapi.exceptions import RequestValidationError
+from fastapi.encoders import jsonable_encoder
+from starlette.responses import JSONResponse as StarletteJSONResponse
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request, exc):
+    """安全处理文件上传场景的校验错误，避免二进制数据导致 UnicodeDecodeError"""
+    safe_errors = []
+    for err in exc.errors():
+        safe_errors.append({
+            "loc": [str(loc) for loc in err.get("loc", [])],
+            "msg": err.get("msg", ""),
+            "type": err.get("type", ""),
+        })
+    return StarletteJSONResponse(
+        status_code=422,
+        content={"detail": safe_errors},
+    )
+
 # 静态文件 & 模板
 FRONTEND_DIR = Path(__file__).parent.parent / "frontend"
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR / "static")), name="static")
@@ -82,6 +101,13 @@ def _preload_models():
     logger.info("预加载模型...")
     _load_llm()       # Qwen 先加载（快）
     _load_model()     # InternVL 后加载（慢）
+    # 预热知识图谱邻接表
+    try:
+        from core.kg import build_adjacency
+        build_adjacency()
+        logger.info("知识图谱邻接表已预热")
+    except Exception as e:
+        logger.warning(f"知识图谱预热失败（将使用纯聚类模式）: {e}")
     logger.info("模型预加载完成")
 
 
@@ -164,9 +190,10 @@ async def search_image_async(
             _tasks[task_id]["status"] = "done"
             _tasks[task_id]["result"] = result
         except Exception as e:
+            import traceback
             _tasks[task_id]["status"] = "error"
             _tasks[task_id]["error"] = str(e)
-            logger.error(f"异步任务失败: {e}")
+            logger.error(f"异步任务失败: {e}\n{traceback.format_exc()}")
         finally:
             loop.close()
 
@@ -180,13 +207,13 @@ async def get_task_result(task_id: str):
     """轮询任务结果"""
     task = _tasks.get(task_id)
     if not task:
-        raise HTTPException(404, "任务不存在")
+        return JSONResponse({"status": "error", "error": "任务不存在"}, status_code=404)
     if task["status"] == "error":
-        raise HTTPException(500, task["error"])
+        return JSONResponse({"status": "error", "error": task["error"]}, status_code=500)
     return task
 
 
-@app.post("/api/search/image")
+# @app.post("/api/search/image")    # ← 已废弃，不可取消注释！会被 Python 挂到下一个 def 上
 # async def search_by_image(
 #     file: UploadFile = File(...),
 #     username: str = Form(DEFAULT_USER),
@@ -261,6 +288,23 @@ async def _solve_and_save(
     """公共逻辑：检索 → LLM 解答 → 保存记录 → 返回结果"""
     user = get_or_create_user(username)
 
+    # 入口校验：题目文本为空或无效时直接返回
+    if not question_text or not question_text.strip() or question_text.strip() == "无":
+        return {
+            "record_id": -1,
+            "question_text": question_text or "",
+            "matched_from_bank": False,
+            "matched_question": None,
+            "similarity": 0.0,
+            "llm_answer": "未能从图片中识别到题目文字，请重新拍摄清晰的题目图片。",
+            "llm_thinking": "",
+            "knowledges": [],
+            "visualization_html": None,
+            "retrieved_references": [],
+            "is_program_question": False,
+            "answered_by_vl": False,
+        }
+
     # Step 2: 向量检索题库
     logger.info(f"检索题库: {question_text[:50]}...")
     retrieved = retrieve(question_text)
@@ -302,11 +346,39 @@ async def _solve_and_save(
             viz_html = None
 
     # 安全合并知识点，确保最终是 list
-    bank_kns = (best_match.get("ques_knowledges") or []) if matched else []
-    llm_kns = llm_result.get("knowledges") or []
-    if not isinstance(bank_kns, list): bank_kns = []
-    if not isinstance(llm_kns, list): llm_kns = []
-    merged_knowledges = list(set(bank_kns + llm_kns))
+    # bank_kns = (best_match.get("ques_knowledges") or []) if matched else []
+    # llm_kns = llm_result.get("knowledges") or []
+    # if not isinstance(bank_kns, list): bank_kns = []
+    # if not isinstance(llm_kns, list): llm_kns = []
+    # merged_knowledges = list(set(bank_kns + llm_kns))
+    #
+    # record = save_solve_record(
+    #     user_id=user.id,
+    #     question_text=question_text,
+    #     llm_answer=llm_answer,
+    #     llm_thinking=llm_thinking,
+    #     matched_question=best_match,
+    #     similarity_score=similarity,
+    #     image_path=image_path,
+    #     visualization_html=viz_html,
+    #     subject=matched.get("subject", "") if matched else llm_result.get("subject", ""),
+    #     ques_type=matched.get("ques_type", "") if matched else llm_result.get("ques_type", ""),
+    #     ques_difficulty=matched.get("ques_difficulty", "") if matched else llm_result.get("ques_difficulty", ""),
+    #     # subject=best_match.get("subject", "") if best_match and similarity >= 0.75 else llm_result.get("subject", ""),
+    #     # ques_type=best_match.get("ques_type", "") if best_match and similarity >= 0.75 else llm_result.get("ques_type", ""),
+    #     # ques_difficulty=best_match.get("ques_difficulty", "") if best_match and similarity >= 0.75 else llm_result.get("ques_difficulty", ""),
+    #     knowledges=merged_knowledges,  # ← 用安全合并后的结果
+    # )
+
+    bank_kns = (best_match.get("ques_knowledges") or []) if best_match else []
+    # 反序列化 JSON 字符串（DB 中 Text 列存的是 JSON 字符串）
+    if isinstance(bank_kns, str) and bank_kns.strip().startswith('['):
+        try:
+            bank_kns = _json.loads(bank_kns)
+        except (_json.JSONDecodeError, TypeError):
+            bank_kns = []
+    if not isinstance(bank_kns, list):
+        bank_kns = []
 
     record = save_solve_record(
         user_id=user.id,
@@ -317,14 +389,21 @@ async def _solve_and_save(
         similarity_score=similarity,
         image_path=image_path,
         visualization_html=viz_html,
-        subject=matched.get("subject", "") if matched else llm_result.get("subject", ""),
-        ques_type=matched.get("ques_type", "") if matched else llm_result.get("ques_type", ""),
-        ques_difficulty=matched.get("ques_difficulty", "") if matched else llm_result.get("ques_difficulty", ""),
-        # subject=best_match.get("subject", "") if best_match and similarity >= 0.75 else llm_result.get("subject", ""),
-        # ques_type=best_match.get("ques_type", "") if best_match and similarity >= 0.75 else llm_result.get("ques_type", ""),
-        # ques_difficulty=best_match.get("ques_difficulty", "") if best_match and similarity >= 0.75 else llm_result.get("ques_difficulty", ""),
-        knowledges=merged_knowledges,  # ← 用安全合并后的结果
+        subject=best_match.get("subject", "") if best_match else "",
+        ques_type=best_match.get("ques_type", "") if best_match else "",
+        ques_difficulty=best_match.get("ques_difficulty", "") if best_match else "一般",
+        knowledges=bank_kns,
     )
+
+    # 兜底：如果 record.knowledges 是 JSON 字符串，反序列化为 list
+    record_knowledges = record.knowledges
+    if isinstance(record_knowledges, str):
+        try:
+            record_knowledges = _json.loads(record_knowledges)
+        except (_json.JSONDecodeError, TypeError):
+            record_knowledges = []
+    if not isinstance(record_knowledges, list):
+        record_knowledges = []
 
     return {
         "record_id": record.id,
@@ -336,7 +415,7 @@ async def _solve_and_save(
         # "matched_question": best_match,
         "llm_answer": llm_answer,
         "llm_thinking": llm_thinking,
-        "knowledges": record.knowledges or [],
+        "knowledges": record_knowledges,
         "visualization_html": viz_html,
         "retrieved_references": retrieved[:3],
         "is_program_question": is_program_question,
@@ -457,7 +536,7 @@ async def get_cluster_analysis(username: str = DEFAULT_USER, n_clusters: int = N
 
 @app.get("/api/practice-plan")
 async def get_practice_plan(username: str = DEFAULT_USER, questions_per_cluster: int = 3):
-    """接口9：基于聚类生成个性化练习计划"""
+    """接口9：基于聚类生成个性化练习计划（支持知识图谱增强学习路径）"""
     user = get_or_create_user(username)
     wrong_questions = get_wrong_questions(user.id)
 
@@ -466,10 +545,14 @@ async def get_practice_plan(username: str = DEFAULT_USER, questions_per_cluster:
 
     plan = generate_cluster_practice_plan(wrong_questions, questions_per_cluster)
 
+    # 检查是否启用了 KG 增强
+    kg_enabled = any(p.get("has_learning_path") for p in plan)
+
     return {
         "plan": plan,
         "total_clusters": len(plan),
         "total_questions": sum(len(p["practice_questions"]) for p in plan),
+        "kg_enabled": kg_enabled,
     }
 
 

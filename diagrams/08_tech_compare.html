@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="zh"><head><meta charset="UTF-8">
+<style>*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"SimSun","Times New Roman",serif;background:#fff;text-align:center}
+</style></head>
+<body>
+<svg width="750" height="320" viewBox="0 0 750 320" xmlns="http://www.w3.org/2000/svg">
+  <defs><marker id="a" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#111"/></marker></defs>
+  <!-- Left: Traditional -->
+  <rect x="20" y="10" width="310" height="36" rx="6" fill="#111" stroke="#111" stroke-width="2"/>
+  <text x="175" y="34" text-anchor="middle" font-size="15" font-weight="bold" fill="#fff" font-family="'Times New Roman',SimSun,serif">传统方案：多模型串联</text>
+  <rect x="40" y="56" width="270" height="34" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="175" y="78" text-anchor="middle" font-size="14" fill="#111" font-family="'Times New Roman',SimSun,serif">文字检测 → 公式识别 → 图形分割</text>
+  <line x1="175" y1="90" x2="175" y2="106" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="40" y="108" width="270" height="34" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="175" y="130" text-anchor="middle" font-size="14" fill="#111" font-family="'Times New Roman',SimSun,serif">OCR 文字提取 → 题库关键词匹配</text>
+  <line x1="175" y1="142" x2="175" y2="158" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="40" y="160" width="270" height="50" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="175" y="180" text-anchor="middle" font-size="13" fill="#111" font-weight="bold" font-family="'Times New Roman',SimSun,serif">返回题库答案</text>
+  <text x="175" y="200" text-anchor="middle" font-size="11" fill="#111" font-family="'Times New Roman',SimSun,serif">链路长 · 误差累积 · 新题无解</text>
+  <!-- Center VS -->
+  <text x="370" y="150" text-anchor="middle" font-size="30" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">VS</text>
+  <!-- Right: New System -->
+  <rect x="420" y="10" width="310" height="36" rx="6" fill="#111" stroke="#111" stroke-width="2"/>
+  <text x="575" y="34" text-anchor="middle" font-size="15" font-weight="bold" fill="#fff" font-family="'Times New Roman',SimSun,serif">本系统方案：多模态端到端</text>
+  <rect x="440" y="56" width="270" height="34" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="575" y="78" text-anchor="middle" font-size="14" fill="#111" font-family="'Times New Roman',SimSun,serif">四步预处理 → InternVL3.5-2B 识别</text>
+  <line x1="575" y1="90" x2="575" y2="106" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="440" y="108" width="270" height="34" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="575" y="130" text-anchor="middle" font-size="14" fill="#111" font-family="'Times New Roman',SimSun,serif">FAISS 检索 + RAG + Qwen3 推理</text>
+  <line x1="575" y1="142" x2="575" y2="158" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+  <rect x="440" y="160" width="270" height="50" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="575" y="180" text-anchor="middle" font-size="13" fill="#111" font-weight="bold" font-family="'Times New Roman',SimSun,serif">AI 解析 + 知识点 + 可视化 + 语音</text>
+  <text x="575" y="200" text-anchor="middle" font-size="11" fill="#111" font-family="'Times New Roman',SimSun,serif">端到端 · 新题可推理 · 多模态输出</text>
+</svg>
+</body>
+</html>

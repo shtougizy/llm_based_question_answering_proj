@@ -43,6 +43,9 @@ build/
 # ===== HuggingFace 缓存 =====
 .cache/
 
+# ===== 论文文档（不提交）=====
+*.docx
+
 # ===== Windows WSL 元数据 =====
 *.Zone.Identifier
 

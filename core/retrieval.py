@@ -72,13 +72,89 @@ def _check_use_db() -> bool:
     return _use_db
 
 
+def _normalize_item(item: dict) -> dict:
+    """标准化单个题库条目：展开嵌套字段、统一类型、反序列化 JSON 字符串"""
+    dd = item.get("display_data") or {}
+    meta = item.get("metadata") or {}
+
+    # 展平 display_data
+    for k, v in dd.items():
+        if k not in item:
+            item[k] = v
+    # 展平 metadata
+    if "subject" not in item:
+        item["subject"] = meta.get("subject", "")
+    if "ques_difficulty" not in item:
+        item["ques_difficulty"] = meta.get("difficulty", "一般")
+
+    # 通用 JSON 字符串反序列化：适用于从 DB 读取的 Text 列
+    def _parse_json_string(val):
+        if isinstance(val, str) and val.strip().startswith('['):
+            try:
+                return json.loads(val)
+            except (json.JSONDecodeError, TypeError):
+                pass
+        return val
+
+    # ques_answer：最终统一为逗号分隔字符串
+    qa = _parse_json_string(item.get("ques_answer", ""))
+    if isinstance(qa, list):
+        item["ques_answer"] = ", ".join(str(x) for x in qa)
+    elif not isinstance(qa, str):
+        item["ques_answer"] = str(qa)
+
+    # ques_knowledges：最终统一为 list
+    qk = _parse_json_string(item.get("ques_knowledges", []))
+    if isinstance(qk, list):
+        item["ques_knowledges"] = qk
+    elif isinstance(qk, str) and qk:
+        item["ques_knowledges"] = [k.strip() for k in qk.replace("、", ",").split(",") if k.strip()]
+    else:
+        item["ques_knowledges"] = []
+
+    # ques_content 是 dict 时提取文本
+    if isinstance(item.get("ques_content"), dict):
+        qc = item["ques_content"]
+        item["ques_content"] = (
+            qc.get("ques_content") or
+            qc.get("题目内容") or
+            qc.get("题目") or
+            qc.get("question") or
+            qc.get("content") or
+            qc.get("text") or
+            str(qc)
+        )
+
+    # 同样标准化 display_data 内的字段（如果有的话）
+    if "display_data" in item and isinstance(item["display_data"], dict):
+        dd = item["display_data"]
+        dd_qa = _parse_json_string(dd.get("ques_answer", ""))
+        if isinstance(dd_qa, list):
+            dd["ques_answer"] = ", ".join(str(x) for x in dd_qa)
+        dd_qk = _parse_json_string(dd.get("ques_knowledges", []))
+        if isinstance(dd_qk, list):
+            dd["ques_knowledges"] = dd_qk
+        if isinstance(dd.get("ques_content"), dict):
+            qc = dd["ques_content"]
+            dd["ques_content"] = (
+                qc.get("ques_content") or qc.get("题目内容") or
+                qc.get("题目") or str(qc)
+            )
+
+    # 标准化完成后删除冗余的内部字段，减小 API 响应体积
+    item.pop("display_data", None)
+    item.pop("rag_search_text", None)
+    item.pop("metadata", None)
+    return item
+
+
 def _fetch_from_db(source_ids: List[str]) -> List[Dict]:
     from core.database import SessionLocal, Question
     with SessionLocal() as db:
         qs = db.query(Question).filter(Question.source_id.in_(source_ids)).all()
         mapping = {}
         for q in qs:
-            mapping[q.source_id] = {
+            item = {
                 "id": q.source_id,
                 "subject": q.subject or "",
                 "ques_type": q.ques_type or "",
@@ -98,6 +174,8 @@ def _fetch_from_db(source_ids: List[str]) -> List[Dict]:
                     "ques_knowledges": q.ques_knowledges or [],
                 }
             }
+            _normalize_item(item)
+            mapping[q.source_id] = item
         return [mapping[sid] for sid in source_ids if sid in mapping]
 
 
@@ -110,8 +188,10 @@ def _fetch_from_json(source_ids: List[str]) -> List[Dict]:
             continue
         dd = item.get("display_data") or {}
         meta = item.get("metadata") or {}
-        result.append({
+        normalized = {
             "id": sid,
+            "metadata": meta,
+            "display_data": dd,
             "subject": dd.get("subject") or meta.get("subject", ""),
             "ques_type": dd.get("ques_type") or meta.get("ques_type", ""),
             "ques_difficulty": dd.get("ques_difficulty") or meta.get("difficulty", ""),
@@ -120,8 +200,9 @@ def _fetch_from_json(source_ids: List[str]) -> List[Dict]:
             "ques_analyze": dd.get("ques_analyze", ""),
             "ques_knowledges": dd.get("ques_knowledges") or meta.get("knowledges") or [],
             "rag_search_text": item.get("rag_search_text", ""),
-            "display_data": dd,
-        })
+        }
+        _normalize_item(normalized)
+        result.append(normalized)
     return result
 
 

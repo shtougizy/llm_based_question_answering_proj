@@ -415,14 +415,34 @@ async function submitQuestion() {
   try {
     var data;
     if (selectedFile) {
-      document.getElementById('loading-text').textContent = '多模态模型识别中...';
+      document.getElementById('loading-text').textContent = '上传图片中...';
       var formData = new FormData();
       formData.append('file', selectedFile);
       formData.append('username', 'default');
       formData.append('need_visualization', needViz);
-      var resp = await fetch('/api/search/image', { method: 'POST', body: formData });
-      data = await resp.json();
-      if (!resp.ok) throw new Error(data.detail || '请求失败');
+      var uploadResp = await fetch('/api/search/image/async', { method: 'POST', body: formData });
+      var taskInfo = await uploadResp.json();
+      if (!uploadResp.ok) throw new Error(taskInfo.detail || '上传失败');
+      var taskId = taskInfo.task_id;
+
+      // 轮询结果，最多等180秒
+      var maxPolls = 60;
+      for (var i = 0; i < maxPolls; i++) {
+        await new Promise(r => setTimeout(r, 3000));
+        var pollResp = await fetch('/api/task/' + taskId);
+        var taskResult = await pollResp.json();
+        if (!pollResp.ok) throw new Error(taskResult.error || '轮询失败');
+        if (taskResult.status === 'done') {
+          data = taskResult.result;
+          break;
+        } else if (taskResult.status === 'error') {
+          throw new Error(taskResult.error || '解题失败');
+        }
+        if (i < 5) document.getElementById('loading-text').textContent = '识别题目中...';
+        else if (i < 20) document.getElementById('loading-text').textContent = '解题中...';
+        else document.getElementById('loading-text').textContent = '解题中...' + (i * 3) + 's';
+      }
+      if (!data) throw new Error('解题超时，请重试');
     } else {
       document.getElementById('loading-text').textContent = 'AI 解答中...';
       var resp2 = await fetch('/api/search/text', {

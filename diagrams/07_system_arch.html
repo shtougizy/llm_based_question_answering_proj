@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<style>*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:"SimSun","Times New Roman",serif;background:#fff;padding:30px;text-align:center}</style>
+</head>
+</head>
+<body>
+<svg width="600" height="260" viewBox="0 0 600 260" xmlns="http://www.w3.org/2000/svg">
+
+  <!-- Layer 1: 用户交互层 -->
+  <rect x="40" y="10" width="520" height="58" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <rect x="40" y="10" width="120" height="26" rx="6" fill="#111"/>
+  <text x="100" y="28" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff" font-family="'Times New Roman',SimSun,serif">用户交互层</text>
+  <rect x="180" y="24" width="80" height="26" rx="4" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="220" y="42" text-anchor="middle" font-size="12" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">Web 端</text>
+  <rect x="275" y="24" width="120" height="26" rx="4" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="335" y="42" text-anchor="middle" font-size="12" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">微信小程序端</text>
+  <rect x="410" y="24" width="130" height="26" rx="4" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="475" y="42" text-anchor="middle" font-size="12" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">Cloudflare Tunnel</text>
+
+  <!-- Arrow between layers -->
+  <line x1="300" y1="68" x2="300" y2="82" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- Layer 2: 业务逻辑层 -->
+  <rect x="40" y="84" width="520" height="66" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <rect x="40" y="84" width="120" height="26" rx="6" fill="#111"/>
+  <text x="100" y="102" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff" font-family="'Times New Roman',SimSun,serif">业务逻辑层</text>
+  <rect x="180" y="98" width="90" height="22" rx="4" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="225" y="114" text-anchor="middle" font-size="12" fill="#111" font-family="'Times New Roman',SimSun,serif">图像预处理</text>
+  <rect x="280" y="98" width="90" height="22" rx="4" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="325" y="114" text-anchor="middle" font-size="12" fill="#111" font-family="'Times New Roman',SimSun,serif">多模态识别</text>
+  <rect x="380" y="98" width="80" height="22" rx="4" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="420" y="114" text-anchor="middle" font-size="12" fill="#111" font-family="'Times New Roman',SimSun,serif">RAG 解题</text>
+  <rect x="470" y="98" width="80" height="22" rx="4" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="510" y="114" text-anchor="middle" font-size="12" fill="#111" font-family="'Times New Roman',SimSun,serif">错题聚类</text>
+  <rect x="180" y="124" width="80" height="18" rx="3" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="220" y="138" text-anchor="middle" font-size="12" fill="#111" font-family="'Times New Roman',SimSun,serif">用户认证</text>
+  <rect x="270" y="124" width="80" height="18" rx="3" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="310" y="138" text-anchor="middle" font-size="12" fill="#111" font-family="'Times New Roman',SimSun,serif">知识图谱</text>
+  <rect x="360" y="124" width="70" height="18" rx="3" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="395" y="138" text-anchor="middle" font-size="12" fill="#111" font-family="'Times New Roman',SimSun,serif">TTS 语音</text>
+  <rect x="440" y="124" width="70" height="18" rx="3" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="475" y="138" text-anchor="middle" font-size="12" fill="#111" font-family="'Times New Roman',SimSun,serif">可视化</text>
+  <rect x="520" y="124" width="30" height="18" rx="3" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="535" y="138" text-anchor="middle" font-size="12" fill="#111" font-family="'Times New Roman',SimSun,serif">API</text>
+
+  <!-- Arrow between layers -->
+  <line x1="300" y1="150" x2="300" y2="164" stroke="#111" stroke-width="2" marker-end="url(#a)"/>
+
+  <!-- Layer 3: 数据存储层 -->
+  <rect x="40" y="166" width="520" height="46" rx="6" fill="#fff" stroke="#111" stroke-width="2"/>
+  <rect x="40" y="166" width="120" height="26" rx="6" fill="#111"/>
+  <text x="100" y="184" text-anchor="middle" font-size="12" font-weight="bold" fill="#fff" font-family="'Times New Roman',SimSun,serif">数据存储层</text>
+  <rect x="180" y="176" width="120" height="22" rx="4" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="240" y="192" text-anchor="middle" font-size="12" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">SQLite 数据库</text>
+  <rect x="315" y="176" width="120" height="22" rx="4" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="375" y="192" text-anchor="middle" font-size="12" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">FAISS 向量库</text>
+  <rect x="450" y="176" width="90" height="22" rx="4" fill="#fff" stroke="#111" stroke-width="2"/>
+  <text x="495" y="192" text-anchor="middle" font-size="12" font-weight="bold" fill="#111" font-family="'Times New Roman',SimSun,serif">Redis 缓存</text>
+
+  <defs>
+    <marker id="a" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><polygon points="0 0, 8 3, 0 6" fill="#111"/></marker>
+  </defs>
+</svg>
+</body>
+</html>

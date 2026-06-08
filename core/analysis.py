@@ -2,6 +2,7 @@
 知识点聚类分析模块
 使用 KMeans 对用户错题的知识点进行聚类，识别薄弱知识群，
 并根据聚类结果从题库中推荐针对性练习题。
+支持知识图谱增强：通过前置依赖展开生成结构化学习路径。
 """
 import json
 import logging
@@ -9,6 +10,7 @@ import numpy as np
 from pathlib import Path
 from typing import List, Dict, Any, Tuple, Optional
 from collections import Counter, defaultdict
+from core.llm import generate_practice_questions
 
 import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
@@ -65,7 +67,13 @@ def _kmeans(X: np.ndarray, k: int, max_iter: int = 100, seed: int = 42) -> Tuple
             min(np.sum((X[i] - X[c]) ** 2) for c in centers_idx)
             for i in range(n)
         ])
-        probs = dists / dists.sum()
+        # probs = dists / dists.sum()
+        total = dists.sum()
+        if total == 0:
+            # 所有剩余点与已有中心距离均为 0（特征完全相同），剩余中心随机选
+            centers_idx.extend(rng.choice(n, size=k - len(centers_idx), replace=False).tolist())
+            break
+        probs = dists / total
         centers_idx.append(rng.choice(n, p=probs))
 
     centroids = X[centers_idx].copy()
@@ -229,12 +237,45 @@ def _fallback_frequency_analysis(wrong_records: List[Dict]) -> List[Dict]:
 # ==================== 练习题推荐 ====================
 
 def _load_question_bank() -> List[Dict]:
-    """从 FAISS meta 文件加载题库"""
+    """从 FAISS meta 文件加载题库，并将嵌套字段展平到顶层"""
     if not Path(FAISS_META_PATH).exists():
         logger.warning("题库 meta 文件不存在")
         return []
     with open(FAISS_META_PATH, "r", encoding="utf-8") as f:
-        return json.load(f)
+        raw = json.load(f)
+    # 将 display_data 子字段展平到顶层，兼容下游直接 .get("ques_content") 等用法
+    for item in raw:
+        dd = item.get("display_data") or {}
+        for k, v in dd.items():
+            if k not in item:
+                item[k] = v
+        # 同时展平 metadata 中的 subject / difficulty 等
+        meta = item.get("metadata") or {}
+        if "subject" not in item:
+            item["subject"] = meta.get("subject", "")
+        if "ques_difficulty" not in item:
+            item["ques_difficulty"] = meta.get("difficulty", "一般")
+        # 确保 ques_answer 为字符串（题库中为列表）
+        if isinstance(item.get("ques_answer"), list):
+            item["ques_answer"] = ", ".join(str(x) for x in item["ques_answer"])
+        # 处理 ques_content 为 dict 的异常情况（现代文阅读等复杂题型）
+        if isinstance(item.get("ques_content"), dict):
+            qc = item["ques_content"]
+            # 尝试从嵌套 dict 中提取文本
+            item["ques_content"] = (
+                qc.get("ques_content") or
+                qc.get("题目内容") or
+                qc.get("题目") or
+                qc.get("question") or
+                qc.get("content") or
+                qc.get("text") or
+                json.dumps(qc, ensure_ascii=False)
+            )
+        # 删除内部字段，减小 API 响应体积
+        item.pop("display_data", None)
+        item.pop("rag_search_text", None)
+        item.pop("metadata", None)
+    return raw
 
 
 def recommend_practice_questions(
@@ -326,21 +367,35 @@ def recommend_practice_questions(
 def generate_cluster_practice_plan(
     wrong_records: List[Dict],
     questions_per_cluster: int = 3,
+    use_kg: bool = True,
 ) -> List[Dict[str, Any]]:
     """
     完整的练习计划生成入口：
     1. 对错题进行 KMeans 聚类
     2. 为每个聚类推荐练习题
-    3. 返回完整的练习计划
+    3. 如果知识图谱可用，为每个聚类生成结构化学习路径
+    4. 返回完整的练习计划
 
     Args:
         wrong_records: 用户所有错题
         questions_per_cluster: 每个知识群推荐的练习题数
+        use_kg: 是否启用知识图谱增强学习路径
 
     Returns:
-        练习计划列表，每项包含聚类信息和推荐题目
+        练习计划列表，每项包含聚类信息和推荐题目。
+        如果 KG 可用且能展开依赖链，还会包含 learning_path 字段。
     """
     clusters = cluster_weak_knowledge_points(wrong_records)
+
+    # 惰性加载 KG（避免循环导入）
+    kg = {}
+    if use_kg:
+        try:
+            from core.kg import build_adjacency, compute_learning_path, recommend_by_learning_path
+            kg = build_adjacency()
+        except Exception as e:
+            logger.warning(f"知识图谱加载失败，使用纯聚类模式: {e}")
+            kg = {}
 
     plan = []
     for cluster in clusters:
@@ -348,7 +403,13 @@ def generate_cluster_practice_plan(
             cluster,
             n_questions=questions_per_cluster,
         )
-        plan.append({
+        if not practice_questions:
+            logger.info(f"题库无匹配，LLM 生成「{cluster['label']}」练习题")
+            practice_questions = generate_practice_questions(
+                cluster["label"], questions_per_cluster
+            )
+
+        plan_entry = {
             "cluster_id": cluster["cluster_id"],
             "label": cluster["label"],
             "knowledge_points": cluster["knowledge_points"],
@@ -356,6 +417,27 @@ def generate_cluster_practice_plan(
             "severity": cluster["severity"],
             "subjects": cluster["subjects"],
             "practice_questions": practice_questions,
-        })
+            "has_learning_path": False,
+        }
+
+        # KG 增强：为聚类知识点生成学习路径
+        if kg and cluster["knowledge_points"]:
+            try:
+                learning_path = compute_learning_path(
+                    cluster["knowledge_points"], kg, max_depth=2
+                )
+                # 只有当学习路径有多个阶段（确实展开了依赖链）时才启用
+                if len(learning_path) > 1:
+                    bank = _load_question_bank()
+                    path_with_questions = recommend_by_learning_path(
+                        learning_path, bank,
+                        wrong_records=cluster.get("records", []),
+                    )
+                    plan_entry["learning_path"] = path_with_questions
+                    plan_entry["has_learning_path"] = True
+            except Exception as e:
+                logger.warning(f"学习路径生成失败（cluster={cluster['cluster_id']}）: {e}")
+
+        plan.append(plan_entry)
 
     return plan

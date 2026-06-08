@@ -145,7 +145,7 @@ def answer_question(question_text: str, retrieved: list) -> dict:
     # 第一步：解答题目
     resp1 = _llm.create_chat_completion(
         messages=[
-            {"role": "system", "content": "/no_think 你是专业教师，用中文解答题目，回答简洁清晰，不要输出思考过程。"},
+            {"role": "system", "content": "你是专业教师，用中文解答题目，回答简洁清晰。"},
             {"role": "user", "content": f"请解答以下题目。{writing_hint}\n\n题目：{question_text}{context}"}
         ],
         max_tokens=max_tokens,
@@ -153,7 +153,7 @@ def answer_question(question_text: str, retrieved: list) -> dict:
     )
     raw = resp1["choices"][0]["message"]["content"].strip()
 
-    # 去掉 <think> 块（即使是空的也去掉）
+    # 去掉 <think> 块
     import re
     thinking = ""
     think_match = re.search(r'<think>(.*?)</think>', raw, re.DOTALL)
@@ -166,7 +166,7 @@ def answer_question(question_text: str, retrieved: list) -> dict:
     # 第二步：提取元数据
     resp2 = _llm.create_chat_completion(
         messages=[
-            {"role": "system", "content": "/no_think 只输出指定格式，不要其他内容。"},
+            {"role": "system", "content": "只输出指定格式，不要输出任何其他内容。"},
             {"role": "user", "content": f"根据题目输出以下信息，每项占一行：\n学科：\n题型：\n难度：\n知识点：（逗号分隔）\n\n题目：{question_text[:150]}"}
         ],
         max_tokens=80,
@@ -316,11 +316,18 @@ def generate_one_practice_question(knowledge: str) -> dict:
 
     prompt = f"""你是一位专业出题教师，请针对知识点「{knowledge}」出一道高质量练习题。
 
-严格按以下格式输出，不要有其他内容：
-题目：（写出完整题目，可以是选择题、填空题或简答题）
-答案：（写出正确答案）
-解析：（写出详细解题思路，100字以内）
-难度：（简单/一般/较难 三选一）"""
+严格按以下格式输出（每行以指定标签开头，标签后紧跟内容）：
+[TITLE]完整题目内容（可以是选择题、填空题或简答题）
+[ANSWER]正确答案
+[ANALYSIS]解题思路（100字内）
+[LEVEL]简单/一般/较难（三选一）
+
+示例：
+[TITLE]计算 ∫x² dx 的结果是什么？
+[ANSWER]x³/3 + C
+[ANALYSIS]根据幂函数积分公式 ∫xⁿdx = xⁿ⁺¹/(n+1) + C，代入 n=2 得 x³/3 + C
+[LEVEL]简单
+"""
 
     with torch.no_grad():
         response = _model.chat(
@@ -336,29 +343,59 @@ def generate_one_practice_question(knowledge: str) -> dict:
 
     raw = response.strip()
     raw = _re.sub(r'<think>.*?</think>', '', raw, flags=_re.DOTALL).strip()
+    raw = _re.sub(r'<thinking>.*?</thinking>', '', raw, flags=_re.DOTALL).strip()
 
-    lines = [l.strip() for l in raw.splitlines() if l.strip()]
-    answer, analyze, difficulty, content_lines = '', '', '一般', []
+    # 用 [TAG] 标签提取各字段
+    def extract_tag(tag):
+        m = _re.search(rf'\[{tag}\]\s*(.*?)(?=\[(?:TITLE|ANSWER|ANALYSIS|LEVEL)\]|\Z)', raw, _re.DOTALL)
+        return m.group(1).strip() if m else ''
 
-    for line in lines:
-        if _re.match(r'^(答案|正确答案)[：:]', line):
-            answer = _re.sub(r'^(答案|正确答案)[：:]\s*', '', line).strip()
-        elif _re.match(r'^(解析|分析)[：:]', line):
-            analyze = _re.sub(r'^(解析|分析)[：:]\s*', '', line).strip()
-        elif _re.match(r'^难度[：:]', line):
-            difficulty = _re.sub(r'^难度[：:]\s*', '', line).strip()
-        elif _re.match(r'^题目[：:]', line):
-            content_lines.append(_re.sub(r'^题目[：:]\s*', '', line).strip())
-        else:
-            content_lines.append(line)
+    ques_content = extract_tag('TITLE')
+    answer = extract_tag('ANSWER')
+    analyze = extract_tag('ANALYSIS')
+    difficulty = extract_tag('LEVEL') or '一般'
 
-    ques_content = '\n'.join(content_lines).strip() or raw
-    if not answer and lines:
-        answer = lines[-1]
-        ques_content = '\n'.join(lines[:-1]).strip() or raw
+    # 兜底：如果标签解析失败，回退到旧的按行解析
+    if not ques_content:
+        lines = [l.strip() for l in raw.splitlines() if l.strip()]
+        content_lines = []
+        for line in lines:
+            if _re.match(r'^(答案|正确答案)[：:]', line):
+                answer = answer or _re.sub(r'^(答案|正确答案)[：:]\s*', '', line).strip()
+            elif _re.match(r'^(解析|分析)[：:]', line):
+                analyze = analyze or _re.sub(r'^(解析|分析)[：:]\s*', '', line).strip()
+            elif _re.match(r'^难度[：:]', line):
+                difficulty = _re.sub(r'^难度[：:]\s*', '', line).strip()
+            elif _re.match(r'^题目[：:]', line):
+                content_lines.append(_re.sub(r'^题目[：:]\s*', '', line).strip())
+            else:
+                content_lines.append(line)
+        ques_content = '\n'.join(content_lines).strip()
+        # 如果所有行都被标记为答案/解析/难度（content_lines 为空），不要用 raw 填充
+        if not ques_content:
+            if answer and len(lines) == 1:
+                # 模型只输出了答案行，无法作为题目
+                return None
+            ques_content = raw
 
+        if not answer and lines:
+            # 取最后一行作答案，前 n-1 行作题目（仅当确实没提取到答案时）
+            answer = lines[-1]
+            ques_content = '\n'.join(lines[:-1]).strip() or raw
+
+    # 清洗：如果 ques_content 仍然为空，返回 None
     if not ques_content:
         return None
+
+    # 双重检查：如果题目内容包含了答案行（兜底逻辑的副作用），裁剪掉
+    if answer and answer in ques_content:
+        idx = ques_content.rfind(answer)
+        if idx > 0:
+            ques_content = ques_content[:idx].strip()
+
+    if not ques_content or len(ques_content) < 10:
+        return None
+
     return {
         'ques_content': ques_content,
         'ques_answer': answer or '见解析',
@@ -415,7 +452,7 @@ def generate_one_practice_question(knowledge: str) -> dict:
 #     }
 
 def generate_practice_questions(knowledge: str, n: int = 3) -> list:
-    """根据知识点让 LLM 生成练习题，不依赖固定格式"""
+    """根据知识点让 LLM 生成练习题"""
     _load_llm()
     import re as _re
     questions = []
@@ -423,43 +460,64 @@ def generate_practice_questions(knowledge: str, n: int = 3) -> list:
     for i in range(n):
         resp = _llm.create_chat_completion(
             messages=[
-                {"role": "system", "content": "/no_think 你是专业教师，请出一道关于指定知识点的练习题并给出答案和解析。"},
-                {"role": "user", "content": f"请出一道关于「{knowledge}」的练习题，包括题目、答案和简短解析。"}
+                {"role": "system", "content": "你是专业教师，请出一道练习题。只用以下标签格式输出，不要其他内容。"},
+                {"role": "user", "content": (
+                    f"请出一道关于「{knowledge}」的练习题。严格按以下格式输出：\n"
+                    "[TITLE]完整题目\n[ANSWER]正确答案\n[ANALYSIS]解题思路（100字内）"
+                )}
             ],
             max_tokens=300,
             temperature=0.8,
         )
         raw = resp["choices"][0]["message"]["content"].strip()
         raw = _re.sub(r'<think>.*?</think>', '', raw, flags=_re.DOTALL).strip()
+        raw = _re.sub(r'<thinking>.*?</thinking>', '', raw, flags=_re.DOTALL).strip()
 
         if not raw:
             continue
 
-        # 把整个输出当题目内容，答案和解析从文本中提取
-        lines = [l.strip() for l in raw.splitlines() if l.strip()]
+        # 用 [TAG] 标签提取
+        def extract_tag(tag):
+            m = _re.search(rf'\[{tag}\]\s*(.*?)(?=\[(?:TITLE|ANSWER|ANALYSIS)\]|\Z)', raw, _re.DOTALL)
+            return m.group(1).strip() if m else ''
 
-        # 尝试提取答案行
-        answer = ''
-        analyze = ''
-        content_lines = []
-        for line in lines:
-            if _re.match(r'^(答案|正确答案|答)[：:：]', line):
-                answer = _re.sub(r'^(答案|正确答案|答)[：:：]\s*', '', line).strip()
-            elif _re.match(r'^(解析|分析|解题)[：:：]', line):
-                analyze = _re.sub(r'^(解析|分析|解题)[：:：]\s*', '', line).strip()
-            elif _re.match(r'^(题目)[：:：]', line):
-                content_lines.append(_re.sub(r'^题目[：:：]\s*', '', line).strip())
-            else:
-                content_lines.append(line)
+        ques_content = extract_tag('TITLE')
+        answer = extract_tag('ANSWER')
+        analyze = extract_tag('ANALYSIS')
 
-        ques_content = '\n'.join(content_lines).strip()
+        # 兜底：标签解析失败时回退到按行解析
         if not ques_content:
-            ques_content = raw
+            lines = [l.strip() for l in raw.splitlines() if l.strip()]
+            content_lines = []
+            for line in lines:
+                if _re.match(r'^(答案|正确答案|答)[：:：]', line):
+                    answer = answer or _re.sub(r'^(答案|正确答案|答)[：:：]\s*', '', line).strip()
+                elif _re.match(r'^(解析|分析|解题)[：:：]', line):
+                    analyze = analyze or _re.sub(r'^(解析|分析|解题)[：:：]\s*', '', line).strip()
+                elif _re.match(r'^(题目)[：:：]', line):
+                    content_lines.append(_re.sub(r'^题目[：:：]\s*', '', line).strip())
+                else:
+                    content_lines.append(line)
 
-        # 如果没提取到答案，把最后一行当答案
-        if not answer and lines:
-            answer = lines[-1]
-            ques_content = '\n'.join(lines[:-1]).strip() or raw
+            ques_content = '\n'.join(content_lines).strip()
+            # 如果所有行都被标记为答案/解析（content_lines 为空），不要用 raw 填充
+            if not ques_content:
+                if answer and len(lines) == 1:
+                    continue  # 模型只输出了答案行，跳过
+                ques_content = raw
+
+            if not answer and lines:
+                answer = lines[-1]
+                ques_content = '\n'.join(lines[:-1]).strip() or raw
+
+        # 清洗：如果题目内容包含了答案行，裁剪掉
+        if answer and answer in ques_content:
+            idx = ques_content.rfind(answer)
+            if idx > 0:
+                ques_content = ques_content[:idx].strip()
+        # 裁剪后太短则不采用
+        if len(ques_content) < 10:
+            continue
 
         questions.append({
             'ques_content': ques_content,

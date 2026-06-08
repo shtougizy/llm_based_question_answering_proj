@@ -1,0 +1,147 @@
+<view class="page">
+  <!-- Tab 栏 -->
+  <view class="tabs">
+    <text class="tab {{tab===0?'active':''}}" bindtap="switchTab" data-tab="0">📋 错题</text>
+    <text class="tab {{tab===1?'active':''}}" bindtap="switchTab" data-tab="1">🧠 聚类</text>
+    <text class="tab {{tab===2?'active':''}}" bindtap="switchTab" data-tab="2">📝 练习</text>
+    <text class="tab {{tab===3?'active':''}}" bindtap="switchTab" data-tab="3">✨ 报告</text>
+  </view>
+
+  <!-- 错误提示 -->
+  <view class="error-bar" wx:if="{{errorMsg}}">
+    <text class="error-text">⚠️ {{errorMsg}}</text>
+  </view>
+
+  <!-- Tab 0: 错题列表 -->
+  <view wx:if="{{tab===0}}">
+    <view class="stats-row">
+      <view class="stat-card"><text class="stat-num red">{{stats.total}}</text><text class="stat-label">错题总数</text></view>
+      <view class="stat-card"><text class="stat-num orange">{{stats.subjects}}</text><text class="stat-label">涉及学科</text></view>
+      <view class="stat-card"><text class="stat-num purple">{{stats.knowledges}}</text><text class="stat-label">知识点数</text></view>
+    </view>
+    <view class="loading-wrap" wx:if="{{loading}}">
+      <view class="spinner"></view><text>加载中...</text>
+    </view>
+    <view class="empty-state" wx:elif="{{wrongs.length===0}}">
+      <text class="empty-icon">🎉</text>
+      <text class="empty-text">错题本为空，继续加油！</text>
+    </view>
+    <view wx:else>
+      <view
+        class="wrong-card {{expandedId===item.id?'expanded':''}}"
+        wx:for="{{wrongs}}" wx:key="id"
+        bindtap="toggleExpand" data-id="{{item.id}}"
+      >
+        <view class="wc-header">
+          <text class="wc-icon">📕</text>
+          <view class="wc-main">
+            <text class="wc-q">{{item.question_text}}</text>
+            <view class="wc-meta">
+              <text class="time-text">{{item.created_at.substring(0,10)}}</text>
+            </view>
+          </view>
+        </view>
+        <view class="wc-detail" wx:if="{{expandedId===item.id}}">
+          <text class="detail-label">AI 解析</text>
+          <text class="detail-answer">{{item.llm_answer}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Tab 1: 聚类分析 -->
+  <view wx:if="{{tab===1}}">
+    <view class="action-bar">
+      <button class="btn-primary" bindtap="loadClusters" disabled="{{clusterLoading}}">
+        {{clusterLoading ? '分析中...' : '🧠 开始聚类分析'}}
+      </button>
+    </view>
+    <view class="loading-wrap" wx:if="{{clusterLoading}}">
+      <view class="spinner"></view><text>正在分析薄弱知识点...</text>
+    </view>
+    <view class="empty-state" wx:elif="{{clusters.length===0}}">
+      <text class="empty-icon">🧠</text>
+      <text class="empty-text">点击上方按钮分析薄弱知识群</text>
+    </view>
+    <view wx:else>
+      <view
+        wx:for="{{clusters}}" wx:key="cluster_id"
+        class="cluster-card {{item.severity==='高'?'sev-high':item.severity==='中'?'sev-mid':'sev-low'}}"
+      >
+        <view class="cluster-header">
+          <text class="cluster-icon">{{item.severity==='高'?'🔴':item.severity==='中'?'🟡':'🟢'}}</text>
+          <view class="cluster-info">
+            <text class="cluster-title">知识群：{{item.label}}</text>
+            <text class="cluster-sub">错题 {{item.wrong_count}} 道 · 薄弱程度：{{item.severity}}</text>
+          </view>
+        </view>
+        <view class="kn-list">
+          <text
+            class="kn-item"
+            wx:for="{{item.knowledge_points}}" wx:key="*this" wx:for-item="kn"
+          >{{kn}}</text>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Tab 2: 练习推荐 -->
+  <view wx:if="{{tab===2}}">
+    <view class="action-bar">
+      <button class="btn-primary" bindtap="loadPractice" disabled="{{practiceLoading}}">
+        {{practiceLoading ? '生成中...' : '📝 生成练习计划'}}
+      </button>
+    </view>
+    <view class="loading-wrap" wx:if="{{practiceLoading}}">
+      <view class="spinner"></view><text>正在生成练习题，请稍候...</text>
+    </view>
+    <view class="empty-state" wx:elif="{{practicePlan.length===0}}">
+      <text class="empty-icon">📝</text>
+      <text class="empty-text">点击生成个性化练习题</text>
+    </view>
+    <view wx:else>
+      <view wx:for="{{practicePlan}}" wx:key="cluster_id" class="practice-section">
+        <view class="practice-header">
+          <text class="practice-title">🎯 {{item.label}}</text>
+          <text class="practice-sub">{{item.severity}} 薄弱 · {{item.practice_questions.length}}题</text>
+        </view>
+        <view
+          wx:for="{{item.practice_questions}}" wx:key="*this"
+          wx:for-item="q" wx:for-index="qi"
+          class="pq-card {{q.showAnswer?'shown':''}}"
+        >
+          <text class="pq-num">{{qi+1}}</text>
+          <text class="pq-content">{{q.ques_content}}</text>
+          <view class="pq-answer" wx:if="{{q.showAnswer}}">
+            <text class="pq-ans-text">✅ 答案：{{q.ques_answer}}</text>
+            <text class="pq-analyze" wx:if="{{q.ques_analyze}}">📖 解析：{{q.ques_analyze}}</text>
+          </view>
+          <button
+            class="pq-toggle"
+            catchtap="toggleAnswer"
+            data-pi="{{index}}" data-qi="{{qi}}" data-shown="{{q.showAnswer}}"
+          >{{q.showAnswer ? '隐藏答案' : '查看答案'}}</button>
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Tab 3: AI 报告 -->
+  <view wx:if="{{tab===3}}">
+    <view class="action-bar">
+      <button class="btn-primary" bindtap="loadReport" disabled="{{reportLoading}}">
+        {{reportLoading ? '生成中...' : '✨ 生成AI报告'}}
+      </button>
+    </view>
+    <view class="loading-wrap" wx:if="{{reportLoading}}">
+      <view class="spinner"></view><text>AI正在分析错题，需要约30秒...</text>
+    </view>
+    <view class="report-box" wx:elif="{{report}}">
+      <text class="report-text">{{report}}</text>
+    </view>
+    <view class="empty-state" wx:else>
+      <text class="empty-icon">✨</text>
+      <text class="empty-text">AI 将分析错题模式并给出学习建议</text>
+    </view>
+  </view>
+</view>

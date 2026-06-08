@@ -1,0 +1,25 @@
+<view class="container">
+  <view class="logo-wrap">
+    <text class="logo-icon">📚</text>
+    <text class="logo-title">拍照搜题</text>
+    <text class="logo-sub">K12 智能学习辅助系统</text>
+  </view>
+
+  <view class="card login-card">
+    <button class="btn-wechat" bindtap="onWechatLogin" disabled="{{loading}}">
+      <text class="btn-icon">💬</text>
+      <text>微信一键登录</text>
+    </button>
+    <button class="btn-guest" bindtap="onGuestLogin" disabled="{{loading}}">
+      👤 以游客身份访问
+    </button>
+    <text class="hint">游客数据仅临时保存，登录后可永久保存学习记录</text>
+  </view>
+
+  <view wx:if="{{loading}}" class="loading-mask">
+    <view class="loading-box">
+      <view class="loading-spinner"></view>
+      <text>{{loadingText}}</text>
+    </view>
+  </view>
+</view>

@@ -15,7 +15,7 @@ from typing import List, Optional, Dict, Any
 
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text,
-    Float, Boolean, DateTime, ForeignKey, JSON, Index, UniqueConstraint
+    Float, Boolean, DateTime, ForeignKey, JSON, Index, UniqueConstraint, text
 )
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, relationship, Session
@@ -168,6 +168,26 @@ class KnowledgeStat(Base):
 def init_db():
     Path(SQLITE_DB_PATH).parent.mkdir(parents=True, exist_ok=True)
     Base.metadata.create_all(engine)
+
+    # 知识图谱关系表（不通过 ORM 管理，用原生 SQL 建表）
+    with engine.begin() as conn:
+        conn.execute(text("""
+            CREATE TABLE IF NOT EXISTS kg_relations (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                knowledge_point TEXT NOT NULL,
+                prerequisite TEXT NOT NULL,
+                relation_type TEXT DEFAULT 'prerequisite',
+                weight REAL DEFAULT 1.0,
+                UNIQUE(knowledge_point, prerequisite)
+            )
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_kg_kp ON kg_relations(knowledge_point)
+        """))
+        conn.execute(text("""
+            CREATE INDEX IF NOT EXISTS idx_kg_prereq ON kg_relations(prerequisite)
+        """))
+
     logger.info(f"数据库初始化完成: {SQLITE_DB_PATH}")
     with SessionLocal() as db:
         if not db.query(User).filter_by(username="default").first():
@@ -428,6 +448,15 @@ def get_knowledge_stats(user_id: int) -> List[Dict]:
 
 
 def _record_to_dict(record: SolveRecord) -> Dict:
+    knowledges = record.knowledges or []
+    # 反序列化 JSON 字符串（SQLite 的 JSON 列读出来可能是字符串）
+    if isinstance(knowledges, str):
+        try:
+            knowledges = json.loads(knowledges)
+        except (json.JSONDecodeError, TypeError):
+            knowledges = []
+    if not isinstance(knowledges, list):
+        knowledges = []
     return {
         "id": record.id,
         "question_text": record.question_text,
@@ -439,7 +468,7 @@ def _record_to_dict(record: SolveRecord) -> Dict:
         "matched_question": record.matched_question,
         "similarity_score": record.similarity_score,
         "is_wrong": record.is_wrong,
-        "knowledges": record.knowledges or [],
+        "knowledges": knowledges,
         "visualization_html": record.visualization_html,
         "created_at": record.created_at.isoformat() if record.created_at else "",
     }
@@ -563,3 +592,37 @@ def get_user_by_openid(openid: str):
         if not auth:
             return None
         return db.query(User).get(auth.user_id)
+
+
+# ==================== 知识图谱操作 ====================
+
+def get_all_kg_relations() -> List[Dict]:
+    """返回全部知识图谱关系记录，用于构建内存邻接表"""
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT knowledge_point, prerequisite, relation_type, weight FROM kg_relations"
+        )).fetchall()
+        return [
+            {"knowledge_point": r[0], "prerequisite": r[1],
+             "relation_type": r[2], "weight": r[3]}
+            for r in rows
+        ]
+
+
+def get_prerequisites(knowledge: str) -> List[str]:
+    """查单个知识点的直接前置依赖"""
+    with engine.connect() as conn:
+        rows = conn.execute(text(
+            "SELECT prerequisite FROM kg_relations WHERE knowledge_point = :kp"
+        ), {"kp": knowledge}).fetchall()
+        return [r[0] for r in rows]
+
+
+def insert_kg_relation(knowledge_point: str, prerequisite: str,
+                       relation_type: str = "prerequisite", weight: float = 1.0):
+    """插入一条知识图谱关系（离线抽取脚本用）"""
+    with engine.begin() as conn:
+        conn.execute(text("""
+            INSERT OR IGNORE INTO kg_relations (knowledge_point, prerequisite, relation_type, weight)
+            VALUES (:kp, :prereq, :rtype, :w)
+        """), {"kp": knowledge_point, "prereq": prerequisite, "rtype": relation_type, "w": weight})
